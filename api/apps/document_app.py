@@ -34,7 +34,7 @@ from api.db.services.dialog_service import DialogService, ConversationService
 from api.db.services.file2document_service import File2DocumentService
 from api.db.services.file_service import FileService
 from api.db.services.llm_service import LLMBundle
-from api.db.services.task_service import TaskService, queue_tasks
+from api.db.services.task_service import TaskService, queue_tasks, queue_tasks2
 from api.db.services.user_service import TenantService, UserTenantService
 from graphrag.mind_map_extractor import MindMapExtractor
 from rag.app import naive
@@ -51,6 +51,7 @@ from api.utils.api_utils import get_json_result
 from rag.utils.minio_conn import MINIO
 from api.utils.file_utils import filename_type, thumbnail, get_project_base_directory
 from api.utils.web_utils import html2pdf, is_valid_url
+from api.settings import retrievaler
 
 
 @manager.route('/upload', methods=['POST'])
@@ -318,6 +319,14 @@ def rm():
     return get_json_result(data=True)
 
 
+@manager.route('/get_chunk/<doc_id>', methods=['GET'])
+def get_chunk_by_doc_id(doc_id):
+    try:
+        data = retrievaler.chunk_list_by_doc_id(doc_id)
+        return get_json_result(data)
+    except Exception as e:
+        return server_error_response(e)
+
 
 @manager.route('/run1', methods=['POST'])
 @validate_request("kb_id", "documents")
@@ -332,26 +341,76 @@ def run1():
     try:
         for doc in req["documents"]:
             doc_id = doc["id"]
-            url = doc["url"]
+            doc_url = doc["url"]
             if not tenant_id:
                 return get_data_error_result(retmsg="Tenant not found!")
-            print("tenent found")
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-            print("Elastic search delete done")
-            doc = req
-            doc.pop("documents", None)
-            doc["doc_id"] = doc_id
-            doc["url"] = url
+
+            new_doc = req
+            new_doc.pop("documents", None)
+            new_doc["doc_id"] = doc_id
+            new_doc["url"] = doc_url
+
             print("doc")
-            print(doc)
+            print(new_doc)
             print("doc")
             
             from rag.svr.task_executor import main1
-            main1(doc)
+            main1(new_doc)
 
         return get_json_result(data=True)
     except Exception as e:
         return server_error_response(e)
+
+
+@manager.route('/run2', methods=['POST'])
+@validate_request("documents")
+def run2():
+    req = request.json
+    print("req")
+    print(req)
+    print("req")
+    tenant_id = req["tenant_id"]
+    try:
+        for doc in req["documents"]:
+            doc_id = doc["id"]
+            doc_url = doc["url"]
+            if not tenant_id:
+                return get_data_error_result(retmsg="Tenant not found!")
+            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
+
+            new_doc = req
+            new_doc.pop("documents", None)
+            new_doc["doc_id"] = doc_id
+            new_doc["url"] = doc_url
+
+            print("doc")
+            print(new_doc)
+            print("doc")
+            queue_tasks2(new_doc)
+    
+    # try:
+    #     for id in req["doc_ids"]:
+    #         tenant_id = DocumentService.get_tenant_id(id)
+    #         if not tenant_id:
+    #             return get_data_error_result(retmsg="Tenant not found!")
+    #         ELASTICSEARCH.deleteByQuery(Q("match", doc_id=id), idxnm=search.index_name(tenant_id))
+
+    #         if str(req["run"]) == TaskStatus.RUNNING.value:
+    #             TaskService.filter_delete([Task.doc_id == id])
+    #             e, doc = DocumentService.get_by_id(id)
+    #             doc = doc.to_dict()
+    #             print("doc")
+    #             print(doc)
+    #             print("doc")
+    #             doc["tenant_id"] = tenant_id
+    #             bucket, name = File2DocumentService.get_minio_address(doc_id=doc["id"])
+    #             queue_tasks(doc, bucket, name)
+
+        return get_json_result(data=True)
+    except Exception as e:
+        return server_error_response(e)
+    
 
 
 @manager.route('/run', methods=['POST'])
@@ -359,15 +418,11 @@ def run1():
 @validate_request("doc_ids", "run")
 def run():
     req = request.json
+    print("req")
+    print(req)
+    print("req")
     try:
         for id in req["doc_ids"]:
-            info = {"run": str(req["run"]), "progress": 0}
-            if str(req["run"]) == TaskStatus.RUNNING.value:
-                info["progress_msg"] = ""
-                info["chunk_num"] = 0
-                info["token_num"] = 0
-            DocumentService.update_by_id(id, info)
-            # if str(req["run"]) == TaskStatus.CANCEL.value:
             tenant_id = DocumentService.get_tenant_id(id)
             if not tenant_id:
                 return get_data_error_result(retmsg="Tenant not found!")
@@ -378,7 +433,9 @@ def run():
                 TaskService.filter_delete([Task.doc_id == id])
                 e, doc = DocumentService.get_by_id(id)
                 doc = doc.to_dict()
-                print()
+                print("doc")
+                print(doc)
+                print("doc")
                 doc["tenant_id"] = tenant_id
                 bucket, name = File2DocumentService.get_minio_address(doc_id=doc["id"])
                 queue_tasks(doc, bucket, name)

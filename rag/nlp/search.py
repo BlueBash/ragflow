@@ -460,3 +460,15 @@ class Dealer:
         for index, chunk in enumerate(es_res['hits']['hits']):
             res.append({fld: chunk['_source'].get(fld) for fld in fields})
         return res
+
+    def chunk_list_by_doc_id(self, doc_id):
+        max_count = 1024
+        s = Search()
+        s = s.query(Q("match", doc_id=doc_id))[0:max_count]
+        s = s.to_dict()
+        
+        es_res = self.es.search(s, timeout="600s", src=True)
+        res = []
+        for index, chunk in enumerate(es_res['hits']['hits']):
+            res.append(chunk['_source'])
+        return res

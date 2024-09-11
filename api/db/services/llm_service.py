@@ -24,6 +24,7 @@ import os
 
 deep_seek_api_key = os.getenv("DEEP_SEEK_API")
 openai_api_key = os.getenv("openai_api_key")
+gemini_api_key = os.getenv("gemini_api_key")
 
 class LLMFactoriesService(CommonService):
     model = LLMFactories
@@ -60,8 +61,8 @@ class TenantLLMService(CommonService):
 
         return list(objs)
 
-    @classmethod
-    def model_instance(cls, llm_type, llm_name=None, lang="Chinese"):
+
+    def model_instance(llm_factory, llm_type, llm_name=None, lang="Chinese"):
         if llm_type == LLMType.EMBEDDING.value:
             mdlnm = llm_name
         elif llm_type == LLMType.SPEECH2TEXT.value:
@@ -113,12 +114,14 @@ class TenantLLMService(CommonService):
                 base_url=model_config["api_base"]
             )
         
-        llm_factory = "OpenAI"
+        print(llm_factory)
         if llm_type == LLMType.CHAT.value:
             if llm_factory == "OpenAI":
                 api_key = openai_api_key
             elif llm_factory == "DeepSeek":
                 api_key = deep_seek_api_key
+            elif llm_factory == "Gemini":
+                api_key = gemini_api_key
             else:
                 raise LookupError("Model({}) not authorized".format(mdlnm))
 
@@ -190,11 +193,11 @@ class TenantLLMService(CommonService):
 
 
 class LLMBundle(object):
-    def __init__(self, llm_type, llm_name=None, lang="Chinese"):
+    def __init__(self, chat_llm_factory, llm_type, llm_name=None, lang="Chinese"):
         self.llm_type = llm_type
         self.llm_name = llm_name
         print(self.llm_name)
-        self.mdl = TenantLLMService.model_instance(llm_type, llm_name, lang=lang)
+        self.mdl = TenantLLMService.model_instance(chat_llm_factory, llm_type, llm_name, lang=lang)
         assert self.mdl, "Can't find model for {}/{}".format(llm_type, llm_name)
         self.max_length = 512
         for lm in LLMService.query(llm_name=llm_name):

@@ -131,6 +131,61 @@ class TaskService(CommonService):
                     cls.model.id == id).execute()
 
 
+def queue_tasks2(doc):
+    def new_task():
+        nonlocal doc
+        return {
+            "id": get_uuid(),
+            "doc_id": doc["id"]
+        }
+    tsks = []
+
+#     print(doc)
+#     if doc["type"] == FileType.PDF.value:
+#         file_bin = MINIO.get(bucket, name)
+#         do_layout = doc["parser_config"].get("layout_recognize", True)
+#         pages = PdfParser.total_page_number(doc["name"], file_bin)
+#         page_size = doc["parser_config"].get("task_page_size", 12)
+#         if doc["parser_id"] == "paper":
+#             page_size = doc["parser_config"].get("task_page_size", 22)
+#         if doc["parser_id"] == "one":
+#             page_size = 1000000000
+#         if doc["parser_id"] == "knowledge_graph":
+#             page_size = 1000000000
+#         if not do_layout:
+#             page_size = 1000000000
+#         page_ranges = doc["parser_config"].get("pages")
+#         if not page_ranges:
+#             page_ranges = [(1, 100000)]
+#         for s, e in page_ranges:
+#             s -= 1
+#             s = max(0, s)
+#             e = min(e - 1, pages)
+#             for p in range(s, e, page_size):
+#                 task = new_task()
+#                 task["from_page"] = p
+#                 task["to_page"] = min(p + page_size, e)
+#                 tsks.append(task)
+
+#     elif doc["parser_id"] == "table":
+#         file_bin = MINIO.get(bucket, name)
+#         rn = RAGFlowExcelParser.row_number(
+#             doc["name"], file_bin)
+#         for i in range(0, rn, 3000):
+#             task = new_task()
+#             task["from_page"] = i
+#             task["to_page"] = min(i + 3000, rn)
+#             tsks.append(task)
+#     else:
+#         tsks.append(new_task())
+
+#     bulk_insert_into_db(Task, tsks, True)
+#     DocumentService.begin2parse(doc["id"])
+
+#     for t in tsks:
+#         assert REDIS_CONN.queue_product(SVR_QUEUE_NAME, message=t), "Can't access Redis. Please check the Redis' status."
+
+
 
 def queue_tasks(doc, bucket, name):
     def new_task():
@@ -185,3 +240,5 @@ def queue_tasks(doc, bucket, name):
 
     for t in tsks:
         assert REDIS_CONN.queue_product(SVR_QUEUE_NAME, message=t), "Can't access Redis. Please check the Redis' status."
+
+
