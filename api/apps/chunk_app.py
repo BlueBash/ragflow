@@ -37,6 +37,53 @@ import hashlib
 import re
 
 
+@manager.route('/list1', methods=['POST'])
+@validate_request("doc_id")
+def list_chunk1():
+    req = request.json
+    doc_id = req["doc_id"]
+    page = int(req.get("page", 1))
+    size = int(req.get("size", 30))
+    question = req.get("keywords", "")
+    tenant_id = req.get("tenant_id")
+    if not tenant_id:
+        return get_data_error_result(retmsg="Tenant not found!")
+    try:
+        query = {
+            "doc_ids": [doc_id], "page": page, "size": size, "question": question, "sort": True
+        }
+        if "available_int" in req:
+            query["available_int"] = int(req["available_int"])
+        sres = retrievaler.search(query, search.index_name(tenant_id))
+        res = {"total": sres.total, "chunks": []}
+        for id in sres.ids:
+            d = {
+                "chunk_id": id,
+                "content_with_weight": rmSpace(sres.highlight[id]) if question and id in sres.highlight else sres.field[
+                    id].get(
+                    "content_with_weight", ""),
+                "doc_id": sres.field[id]["doc_id"],
+                "docnm_kwd": sres.field[id]["docnm_kwd"],
+                "important_kwd": sres.field[id].get("important_kwd", []),
+                "img_id": sres.field[id].get("img_id", ""),
+                "available_int": sres.field[id].get("available_int", 1),
+                "positions": sres.field[id].get("position_int", "").split("\t")
+            }
+            if len(d["positions"]) % 5 == 0:
+                poss = []
+                for i in range(0, len(d["positions"]), 5):
+                    poss.append([float(d["positions"][i]), float(d["positions"][i + 1]), float(d["positions"][i + 2]),
+                                 float(d["positions"][i + 3]), float(d["positions"][i + 4])])
+                d["positions"] = poss
+            res["chunks"].append(d)
+        return get_json_result(data=res)
+    except Exception as e:
+        if str(e).find("not_found") > 0:
+            return get_json_result(data=False, retmsg=f'No chunk found!',
+                                   retcode=RetCode.DATA_ERROR)
+        return server_error_response(e)
+
+
 @manager.route('/list', methods=['POST'])
 @login_required
 @validate_request("doc_id")
