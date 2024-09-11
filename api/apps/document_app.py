@@ -332,11 +332,6 @@ def get_chunk_by_doc_id(doc_id):
 @validate_request("kb_id", "documents")
 def run1():
     req = request.json
-    print("req")
-    print("req")
-    print(req)
-    print("req")
-    print("req")
     tenant_id = req["tenant_id"]
     try:
         for doc in req["documents"]:
@@ -346,10 +341,18 @@ def run1():
                 return get_data_error_result(retmsg="Tenant not found!")
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
 
-            new_doc = req
+            new_doc = req.copy()
             new_doc.pop("documents", None)
             new_doc["doc_id"] = doc_id
             new_doc["url"] = doc_url
+            new_doc["language"] = "English"
+            new_doc["name"] = doc_url
+            if doc.get("parser_id"):
+                print("parser id")
+                new_doc["parser_id"] = doc.get("parser_id")
+            if doc.get("parser_config"):
+                print("parser config")
+                new_doc["parser_config"] = doc.get("parser_config")
 
             print("doc")
             print(new_doc)

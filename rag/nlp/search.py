@@ -469,6 +469,9 @@ class Dealer:
         
         es_res = self.es.search(s, timeout="600s", src=True)
         res = []
+        count = 0
         for index, chunk in enumerate(es_res['hits']['hits']):
             res.append(chunk['_source'])
+            count +=1
+        print(count)
         return res
