@@ -94,6 +94,25 @@ class TenantLLMService(CommonService):
                         raise LookupError(f"Type of {llm_type} model is not set.")
                     #raise LookupError("Model({}) not authorized".format(mdlnm))
 
+        if not model_config:
+            if llm_factory == "OpenAI":
+                api_key = openai_api_key
+            elif llm_factory == "Gemini":
+                api_key = gemini_api_key
+            elif llm_factory == "DeepSeek":
+                api_key = deep_seek_api_key
+            else:
+                raise LookupError("Model({}) not authorized".format(mdlnm))
+
+            model_config = {
+            "llm_factory": llm_factory,
+            "api_key": api_key, 
+            "llm_name": llm_name,
+            "api_base": ""
+            }
+
+        print(model_config)
+
         if llm_type == LLMType.EMBEDDING.value:
             if model_config["llm_factory"] not in EmbeddingModel:
                 return
@@ -114,23 +133,7 @@ class TenantLLMService(CommonService):
                 base_url=model_config["api_base"]
             )
         
-        print(llm_factory)
         if llm_type == LLMType.CHAT.value:
-            if llm_factory == "OpenAI":
-                api_key = openai_api_key
-            elif llm_factory == "DeepSeek":
-                api_key = deep_seek_api_key
-            elif llm_factory == "Gemini":
-                api_key = gemini_api_key
-            else:
-                raise LookupError("Model({}) not authorized".format(mdlnm))
-
-            model_config = {
-            "llm_factory": llm_factory,
-            "api_key": api_key, 
-            "llm_name": llm_name,
-            "api_base": ""
-            }
             return ChatModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
 
         if llm_type == LLMType.SPEECH2TEXT:

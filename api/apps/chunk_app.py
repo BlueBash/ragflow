@@ -295,6 +295,51 @@ def create():
         return get_json_result(data={"chunk_id": chunck_id})
     except Exception as e:
         return server_error_response(e)
+    
+@manager.route('/retrieval_test1', methods=['POST'])
+@validate_request("tenant_id", "kb_id", "question")
+def retrieval_test1():
+    req = request.json
+    page = int(req.get("page", 1))
+    size = int(req.get("size", 30))
+    question = req["question"]
+    kb_id = req["kb_id"]
+    doc_ids = req.get("doc_ids", [])
+    similarity_threshold = float(req.get("similarity_threshold", 0.2))
+    vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
+    top = int(req.get("top_k", 1024))
+    tenant_id = req["tenant_id"]
+    try:
+        embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, llm_name=req["embd_id"])
+
+        rerank_mdl = None
+        if req.get("rerank_id"):
+            print("rerank_mdl is selecting........")
+            rerank_mdl = TenantLLMService.model_instance(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"])
+
+        if req.get("keyword", False):
+            chat_mdl = TenantLLMService.model_instance(req["llm_factory"], LLMType.CHAT)
+            question += keyword_extraction(chat_mdl, question)
+
+        parser_id = "normal"  # pass if it is Graph
+        if parser_id != ParserType.KG:
+            retr = retrievaler
+        else:
+            retr = kg_retrievaler
+        
+        ranks = retr.retrieval(question, embd_mdl, tenant_id, [kb_id], page, size,
+                               similarity_threshold, vector_similarity_weight, top,
+                               doc_ids, rerank_mdl=rerank_mdl)
+        for c in ranks["chunks"]:
+            if "vector" in c:
+                del c["vector"]
+
+        return get_json_result(data=ranks)
+    except Exception as e:
+        if str(e).find("not_found") > 0:
+            return get_json_result(data=False, retmsg=f'No chunk found! Check the chunk status please!',
+                                   retcode=RetCode.DATA_ERROR)
+        return server_error_response(e)
 
 
 @manager.route('/retrieval_test', methods=['POST'])

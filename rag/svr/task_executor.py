@@ -486,7 +486,7 @@ def main1():
     # TODO: exception handler
     ## set_progress(r["did"], -1, "ERROR: ")
     try:
-        embd_mdl = LLMBundle("lol", LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
+        embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
     except Exception as e:
         cron_logger.error(str(e))
     print(embd_mdl)
@@ -530,7 +530,7 @@ def main1():
     if r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False):
         print("use_raptor is True.")
         try:
-            chat_mdl = LLMBundle(r["chat_llm_factory"], LLMType.CHAT, llm_name=r["llm_id"], lang=r["language"])
+            chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, llm_name=r["llm_id"], lang=r["language"])
             print("chat_mdl:-- ",chat_mdl)
             cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback=None)
         except Exception as e:
@@ -564,7 +564,7 @@ def main():
     for _, r in rows.iterrows():
         callback = partial(set_progress, r["id"], r["from_page"], r["to_page"])
         try:
-            embd_mdl = LLMBundle("lol", LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
+            embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
         except Exception as e:
             callback(-1, msg=str(e))
             cron_logger.error(str(e))
@@ -572,7 +572,7 @@ def main():
 
         if r.get("task_type", "") == "raptor":
             try:
-                chat_mdl = LLMBundle(r["chat_llm_factory"], LLMType.CHAT, llm_name=r["llm_id"], lang=r["language"])
+                chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, llm_name=r["llm_id"], lang=r["language"])
                 cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback)
             except Exception as e:
                 callback(-1, msg=str(e))
