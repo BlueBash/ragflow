@@ -108,6 +108,32 @@ def set_progress(task_id, from_page=0, to_page=-1,
         os._exit(0)
 
 
+def collect2():
+    global CONSUMEER_NAME, PAYLOAD
+    try:
+        PAYLOAD = REDIS_CONN.get_unacked_for(CONSUMEER_NAME, SVR_QUEUE_NAME, "rag_flow_svr_task_broker")
+        if not PAYLOAD:
+            PAYLOAD = REDIS_CONN.queue_consumer(SVR_QUEUE_NAME, "rag_flow_svr_task_broker", CONSUMEER_NAME)
+        if not PAYLOAD:
+            time.sleep(1)
+            return pd.DataFrame()
+    except Exception as e:
+        cron_logger.error("Get task event from queue exception:" + str(e))
+        return pd.DataFrame()
+
+    msg = PAYLOAD.get_message()
+    if not msg:
+        return pd.DataFrame()
+
+    if TaskService.do_cancel(msg["id"]):
+        cron_logger.info("Task {} has been canceled.".format(msg["id"]))
+        return pd.DataFrame()
+    tasks = msg
+    if not tasks:
+        cron_logger.warning("{} empty task!".format(msg["id"]))
+        return []
+    return tasks
+
 def collect():
     global CONSUMEER_NAME, PAYLOAD
     try:
@@ -443,7 +469,10 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
     return res, tk_count
 
 
-def main1(r):
+def main1():
+    r = collect2()
+    if len(r)==0:
+        return
     print("inside main1")
     st = timer()
     cks = build1(r)
@@ -508,25 +537,24 @@ def main1(r):
             print(str(e))
             cron_logger.error(str(e))
 
-    init_kb(r)
-    chunk_count = len(set([c["_id"] for c in cks]))
-    st = timer()
-    es_r = ""
-    es_bulk_size = 4
-    for b in range(without_raptor_len_chunk, len(cks), es_bulk_size):
-        es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
-        if b % 128 == 0:
-            print(0.8 + 0.1 * (b + 1) / len(cks))
+        init_kb(r)
+        chunk_count = len(set([c["_id"] for c in cks]))
+        st = timer()
+        es_r = ""
+        es_bulk_size = 4
+        for b in range(without_raptor_len_chunk, len(cks), es_bulk_size):
+            es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
+            if b % 128 == 0:
+                print(0.8 + 0.1 * (b + 1) / len(cks))
 
-    cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
-    if es_r:
-        print(f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
-        ELASTICSEARCH.deleteByQuery(
-            Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
-        cron_logger.error(str(es_r))
-    print("chunk_count:--", chunk_count)
-    print("all done............")
-            
+        cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        if es_r:
+            print(f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
+            ELASTICSEARCH.deleteByQuery(
+                Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
+            cron_logger.error(str(es_r))
+        print("chunk_count:--", chunk_count)
+        print("all done............")
 
 def main():
     rows = collect()
@@ -629,7 +657,7 @@ if __name__ == "__main__":
     exe.submit(report_status)
 
     while True:
-        main()
+        main1()
         if PAYLOAD:
             PAYLOAD.ack()
             PAYLOAD = None

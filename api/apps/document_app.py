@@ -333,12 +333,12 @@ def get_chunk_by_doc_id(doc_id):
 def run1():
     req = request.json
     tenant_id = req["tenant_id"]
+    if not tenant_id:
+        return get_data_error_result(retmsg="Tenant not found!")
     try:
         for doc in req["documents"]:
             doc_id = doc["id"]
             doc_url = doc["url"]
-            if not tenant_id:
-                return get_data_error_result(retmsg="Tenant not found!")
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
 
             new_doc = req.copy()
@@ -374,41 +374,32 @@ def run2():
     print(req)
     print("req")
     tenant_id = req["tenant_id"]
+    if not tenant_id:
+        return get_data_error_result(retmsg="Tenant not found!")
     try:
         for doc in req["documents"]:
             doc_id = doc["id"]
             doc_url = doc["url"]
-            if not tenant_id:
-                return get_data_error_result(retmsg="Tenant not found!")
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
 
-            new_doc = req
+            new_doc = req.copy()
             new_doc.pop("documents", None)
             new_doc["doc_id"] = doc_id
             new_doc["url"] = doc_url
+            new_doc["language"] = "English"
+            new_doc["name"] = doc_url
+            new_doc["id"] = get_uuid()
+            if doc.get("parser_id"):
+                print("parser id")
+                new_doc["parser_id"] = doc.get("parser_id")
+            if doc.get("parser_config"):
+                print("parser config")
+                new_doc["parser_config"] = doc.get("parser_config")
 
             print("doc")
             print(new_doc)
             print("doc")
             queue_tasks2(new_doc)
-    
-    # try:
-    #     for id in req["doc_ids"]:
-    #         tenant_id = DocumentService.get_tenant_id(id)
-    #         if not tenant_id:
-    #             return get_data_error_result(retmsg="Tenant not found!")
-    #         ELASTICSEARCH.deleteByQuery(Q("match", doc_id=id), idxnm=search.index_name(tenant_id))
-
-    #         if str(req["run"]) == TaskStatus.RUNNING.value:
-    #             TaskService.filter_delete([Task.doc_id == id])
-    #             e, doc = DocumentService.get_by_id(id)
-    #             doc = doc.to_dict()
-    #             print("doc")
-    #             print(doc)
-    #             print("doc")
-    #             doc["tenant_id"] = tenant_id
-    #             bucket, name = File2DocumentService.get_minio_address(doc_id=doc["id"])
-    #             queue_tasks(doc, bucket, name)
 
         return get_json_result(data=True)
     except Exception as e:

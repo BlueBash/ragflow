@@ -7,16 +7,16 @@ if [[ -z "$WS" || $WS -lt 1 ]]; then
   WS=1
 fi
 
-# function task_exe(){
-#     while [ 1 -eq 1 ];do
-#       $PY rag/svr/task_executor.py ;
-#     done
-# }
+function task_exe(){
+    while [ 1 -eq 1 ];do
+      $PY rag/svr/task_executor.py ;
+    done
+}
 
-# for ((i=0;i<WS;i++))
-# do
-#   task_exe  &
-# done
+for ((i=0;i<WS;i++))
+do
+  task_exe  &
+done
 
 while [ 1 -eq 1 ];do
     $PY api/ragflow_server.py
