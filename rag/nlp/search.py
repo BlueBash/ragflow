@@ -470,8 +470,18 @@ class Dealer:
         es_res = self.es.search(s, timeout="600s", src=True)
         res = []
         count = 0
+        key_to_delete_status = True
+        key_to_delete = []
         for index, chunk in enumerate(es_res['hits']['hits']):
-            res.append(chunk['_source'])
-            count +=1
+            chunk_source = chunk['_source']
+            
+            if key_to_delete_status:
+                key_to_delete = [key for key in chunk_source if key.startswith('q_') and key.endswith('_vec')]
+                key_to_delete_status = False
+            del chunk_source[key_to_delete[0]]
+            
+            res.append(chunk_source)
+            count += 1
+        
         print(count)
         return res

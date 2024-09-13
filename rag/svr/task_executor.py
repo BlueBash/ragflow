@@ -469,8 +469,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
     return res, tk_count
 
 
-def main1():
-    r = collect2()
+def main1(r):
     if len(r)==0:
         return
     print("inside main1")
@@ -486,7 +485,7 @@ def main1():
     # TODO: exception handler
     ## set_progress(r["did"], -1, "ERROR: ")
     try:
-        embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
+        embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
     except Exception as e:
         cron_logger.error(str(e))
     print(embd_mdl)
@@ -508,7 +507,6 @@ def main1():
     st = timer()
     es_r = ""
     es_bulk_size = 4
-    without_raptor_len_chunk = len(cks)
     for b in range(0, len(cks), es_bulk_size):
         es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
         if b % 128 == 0:
@@ -520,7 +518,6 @@ def main1():
         ELASTICSEARCH.deleteByQuery(
             Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
         cron_logger.error(str(es_r))
-    print("chunk_count:--", chunk_count)
     print("all done............")
     import time
     time.sleep(2)
@@ -530,7 +527,7 @@ def main1():
     if r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False):
         print("use_raptor is True.")
         try:
-            chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, llm_name=r["llm_id"], lang=r["language"])
+            chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, r["llm_id"], r["llm_api_key"])
             print("chat_mdl:-- ",chat_mdl)
             cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback=None)
         except Exception as e:
@@ -542,7 +539,95 @@ def main1():
         st = timer()
         es_r = ""
         es_bulk_size = 4
-        for b in range(without_raptor_len_chunk, len(cks), es_bulk_size):
+        print("chunk_count inside rap:--", len(cks))
+        for b in range(0, len(cks), es_bulk_size):
+            es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
+            if b % 128 == 0:
+                print(0.8 + 0.1 * (b + 1) / len(cks))
+
+        cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        if es_r:
+            print(f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
+            ELASTICSEARCH.deleteByQuery(
+                Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
+            cron_logger.error(str(es_r))
+        print("chunk_count:--", chunk_count)
+        print("all done............")
+
+
+def main2():
+    r = collect2()
+    if len(r)==0:
+        return
+    print("inside main1")
+    st = timer()
+    cks = build1(r)
+    print("len of chunks:--", len(cks))
+    cron_logger.info("Build chunks({}): {}".format(r["name"], timer() - st))
+    if cks is None:
+        return
+    if not cks:
+        print("No chunk! Done!")
+        return
+    # TODO: exception handler
+    ## set_progress(r["did"], -1, "ERROR: ")
+    try:
+        embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
+    except Exception as e:
+        cron_logger.error(str(e))
+    print(embd_mdl)
+
+    print("Finished slicing files(%d). Start to embedding the content." % len(cks))
+    st = timer()
+    try:
+        tk_count = embedding1(cks, embd_mdl, r["parser_config"])
+        print("tk_count:-",tk_count)
+    except Exception as e:
+        print("Embedding error:{}".format(str(e)))
+        cron_logger.error(str(e))
+        tk_count = 0
+    cron_logger.info("Embedding elapsed({}): {:.2f}".format(r["name"], timer() - st))
+    print("Finished embedding({:.2f})! Start to build index!".format(timer() - st))
+
+    init_kb(r)
+    chunk_count = len(set([c["_id"] for c in cks]))
+    st = timer()
+    es_r = ""
+    es_bulk_size = 4
+    for b in range(0, len(cks), es_bulk_size):
+        es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
+        if b % 128 == 0:
+            print(0.8 + 0.1 * (b + 1) / len(cks))
+
+    cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+    if es_r:
+        print(f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
+        ELASTICSEARCH.deleteByQuery(
+            Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
+        cron_logger.error(str(es_r))
+    print("all done............")
+    import time
+    time.sleep(2)
+
+
+    #RAPTOR
+    if r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False):
+        print("use_raptor is True.")
+        try:
+            chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, r["llm_id"], r["llm_api_key"])
+            print("chat_mdl:-- ",chat_mdl)
+            cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback=None)
+        except Exception as e:
+            print(str(e))
+            cron_logger.error(str(e))
+
+        init_kb(r)
+        chunk_count = len(set([c["_id"] for c in cks]))
+        st = timer()
+        es_r = ""
+        es_bulk_size = 4
+        print("chunk_count inside rap:--", len(cks))
+        for b in range(0, len(cks), es_bulk_size):
             es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
             if b % 128 == 0:
                 print(0.8 + 0.1 * (b + 1) / len(cks))
@@ -564,7 +649,7 @@ def main():
     for _, r in rows.iterrows():
         callback = partial(set_progress, r["id"], r["from_page"], r["to_page"])
         try:
-            embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
+            embd_mdl = LLMBundle("BAAI", LLMType.EMBEDDING, llm_name=r["embd_id"], lang=r["language"])
         except Exception as e:
             callback(-1, msg=str(e))
             cron_logger.error(str(e))
@@ -657,7 +742,7 @@ if __name__ == "__main__":
     exe.submit(report_status)
 
     while True:
-        main1()
+        main2()
         if PAYLOAD:
             PAYLOAD.ack()
             PAYLOAD = None

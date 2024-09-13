@@ -21,7 +21,7 @@ from flask import request, Response
 from flask_login import login_required, current_user
 
 from api.db import LLMType
-from api.db.services.dialog_service import DialogService, ConversationService, chat
+from api.db.services.dialog_service import DialogService, ConversationService, chat, chat1
 from api.db.services.llm_service import LLMBundle, TenantService
 from api.settings import RetCode
 from api.utils import get_uuid
@@ -128,6 +128,42 @@ def list_convsersation():
             reverse=True)
         convs = [d.to_dict() for d in convs]
         return get_json_result(data=convs)
+    except Exception as e:
+        return server_error_response(e)
+
+
+
+@manager.route('/completion1', methods=['POST'])
+def completion1():
+    req = request.json
+    stream = req.get("stream", "True")
+    try:
+        def stream():
+            try:
+                for ans in chat1(req, True):
+                    yield "data:" + json.dumps({"retcode": 0, "retmsg": "", "data": ans}, ensure_ascii=False) + "\n\n"
+            except Exception as e:
+                yield "data:" + json.dumps({"retcode": 500, "retmsg": str(e),
+                                            "data": {"answer": "**ERROR**: " + str(e), "reference": []}},
+                                           ensure_ascii=False) + "\n\n"
+            yield "data:" + json.dumps({"retcode": 0, "retmsg": "", "data": True}, ensure_ascii=False) + "\n\n"
+
+        if stream=="True":
+            print("inside stream...")
+            resp = Response(stream(), mimetype="text/event-stream")
+            resp.headers.add_header("Cache-control", "no-cache")
+            resp.headers.add_header("Connection", "keep-alive")
+            resp.headers.add_header("X-Accel-Buffering", "no")
+            resp.headers.add_header("Content-Type", "text/event-stream; charset=utf-8")
+            return resp
+
+        else:
+            print("not stream...")
+            answer = None
+            for ans in chat1(req, False):
+                answer = ans
+                break
+            return get_json_result(data=answer)
     except Exception as e:
         return server_error_response(e)
 

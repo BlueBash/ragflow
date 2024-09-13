@@ -37,7 +37,7 @@ import hashlib
 import re
 
 
-@manager.route('/list1', methods=['POST'])
+@manager.route('/list_v2', methods=['POST'])
 @validate_request("doc_id")
 def list_chunk1():
     req = request.json
@@ -296,7 +296,7 @@ def create():
     except Exception as e:
         return server_error_response(e)
     
-@manager.route('/retrieval_test1', methods=['POST'])
+@manager.route('/retrieval_test_v2', methods=['POST'])
 @validate_request("tenant_id", "kb_id", "question")
 def retrieval_test1():
     req = request.json
@@ -310,15 +310,15 @@ def retrieval_test1():
     top = int(req.get("top_k", 1024))
     tenant_id = req["tenant_id"]
     try:
-        embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, llm_name=req["embd_id"])
+        embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, llm_name=req["embd_id"], api_key=req["embd_api_key"])
 
         rerank_mdl = None
         if req.get("rerank_id"):
             print("rerank_mdl is selecting........")
-            rerank_mdl = TenantLLMService.model_instance(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"])
+            rerank_mdl = TenantLLMService.model_instance(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"], api_key=req["rerank_api_key"])
 
         if req.get("keyword", False):
-            chat_mdl = TenantLLMService.model_instance(req["llm_factory"], LLMType.CHAT)
+            chat_mdl = TenantLLMService.model_instance(req["llm_factory"], LLMType.CHAT, llm_name=req["llm_id"], api_key=req["llm_api_key"])
             question += keyword_extraction(chat_mdl, question)
 
         parser_id = "normal"  # pass if it is Graph

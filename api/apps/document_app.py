@@ -184,6 +184,34 @@ def create():
         return server_error_response(e)
 
 
+@manager.route('/list_v2', methods=['GET'])
+def list_docs_v2():
+    kb_id = request.args.get("kb_id")
+    if not kb_id:
+        return get_json_result(
+            data=False, retmsg='Lack of "KB ID"', retcode=RetCode.ARGUMENT_ERROR)
+    tenants = UserTenantService.query(user_id=current_user.id)
+    for tenant in tenants:
+        if KnowledgebaseService.query(tenant_id=tenant.tenant_id, id=kb_id):
+            break
+    else:
+        return get_json_result(
+            data=False, retmsg=f'Only owner of knowledgebase authorized for this operation.',
+            retcode=RetCode.OPERATING_ERROR)
+    keywords = request.args.get("keywords", "")
+
+    page_number = int(request.args.get("page", 1))
+    items_per_page = int(request.args.get("page_size", 15))
+    orderby = request.args.get("orderby", "create_time")
+    desc = request.args.get("desc", True)
+    try:
+        docs, tol = DocumentService.get_by_kb_id(
+            kb_id, page_number, items_per_page, orderby, desc, keywords)
+        return get_json_result(data={"total": tol, "docs": docs})
+    except Exception as e:
+        return server_error_response(e)
+    
+
 @manager.route('/list', methods=['GET'])
 @login_required
 def list_docs():
@@ -319,22 +347,20 @@ def rm():
     return get_json_result(data=True)
 
 
-@manager.route('/get_chunk/<doc_id>', methods=['GET'])
+@manager.route('/chunk_v2/<doc_id>', methods=['GET'])
 def get_chunk_by_doc_id(doc_id):
     try:
         data = retrievaler.chunk_list_by_doc_id(doc_id)
-        return get_json_result(data)
+        return get_json_result(data=data)
     except Exception as e:
         return server_error_response(e)
 
 
-@manager.route('/run1', methods=['POST'])
-@validate_request("kb_id", "documents")
+@manager.route('/run_v2', methods=['POST'])
+@validate_request("tenant_id", "kb_id", "documents")
 def run1():
     req = request.json
     tenant_id = req["tenant_id"]
-    if not tenant_id:
-        return get_data_error_result(retmsg="Tenant not found!")
     try:
         for doc in req["documents"]:
             doc_id = doc["id"]
@@ -345,14 +371,10 @@ def run1():
             new_doc.pop("documents", None)
             new_doc["doc_id"] = doc_id
             new_doc["url"] = doc_url
-            new_doc["language"] = "English"
             new_doc["name"] = doc_url
-            if doc.get("parser_id"):
-                print("parser id")
-                new_doc["parser_id"] = doc.get("parser_id")
-            if doc.get("parser_config"):
-                print("parser config")
-                new_doc["parser_config"] = doc.get("parser_config")
+            new_doc["parser_id"] = doc.get("parser_id")
+            new_doc["parser_config"] = doc.get("parser_config")
+            new_doc["language"] = "English"
 
             print("doc")
             print(new_doc)
@@ -366,16 +388,11 @@ def run1():
         return server_error_response(e)
 
 
-@manager.route('/run2', methods=['POST'])
-@validate_request("documents")
+@manager.route('/run_v3', methods=['POST'])
+@validate_request("tenant_id", "kb_id", "documents")
 def run2():
     req = request.json
-    print("req")
-    print(req)
-    print("req")
     tenant_id = req["tenant_id"]
-    if not tenant_id:
-        return get_data_error_result(retmsg="Tenant not found!")
     try:
         for doc in req["documents"]:
             doc_id = doc["id"]
@@ -386,15 +403,10 @@ def run2():
             new_doc.pop("documents", None)
             new_doc["doc_id"] = doc_id
             new_doc["url"] = doc_url
-            new_doc["language"] = "English"
             new_doc["name"] = doc_url
-            new_doc["id"] = get_uuid()
-            if doc.get("parser_id"):
-                print("parser id")
-                new_doc["parser_id"] = doc.get("parser_id")
-            if doc.get("parser_config"):
-                print("parser config")
-                new_doc["parser_config"] = doc.get("parser_config")
+            new_doc["parser_id"] = doc.get("parser_id")
+            new_doc["parser_config"] = doc.get("parser_config")
+            new_doc["language"] = "English"
 
             print("doc")
             print(new_doc)

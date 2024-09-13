@@ -84,7 +84,78 @@ def llm_id2llm_type(llm_id):
         for llm in llm_factory["llm"]:
             if llm_id == llm["llm_name"]:
                 return llm["model_type"].strip(",")[-1]
-                
+
+
+def chat1(req, stream=True):
+    page = int(req.get("page", 1))
+    size = int(req.get("size", 30))
+    question = req["question"]
+    kb_id = req["kb_id"]
+    doc_ids = req.get("doc_ids", [])
+    similarity_threshold = float(req.get("similarity_threshold", 0.2))
+    vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
+    top = int(req.get("top_k", 1024))
+    tenant_id = req["tenant_id"]
+    prompt = req["prompt"]
+    embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, llm_name=req["embd_id"])
+    chat_mdl = LLMBundle(req["llm_factory"], LLMType.CHAT, req["llm_id"])
+
+    rerank_mdl = None
+    if req.get("rerank_id"):
+        print("rerank_mdl is selecting........")
+        rerank_mdl = TenantLLMService.model_instance(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"])
+
+    if req.get("keyword", False):
+        chat_mdl = TenantLLMService.model_instance(req["llm_factory"], LLMType.CHAT)
+        question += keyword_extraction(chat_mdl, question)
+
+    parser_id = "normal"  # pass if it is Graph
+    if parser_id != ParserType.KG:
+        retr = retrievaler
+    else:
+        retr = kg_retrievaler
+    
+    kbinfos = retr.retrieval(question, embd_mdl, tenant_id, [kb_id], page, size,
+                            similarity_threshold, vector_similarity_weight, top,
+                            doc_ids, rerank_mdl=rerank_mdl)
+    
+    knowledges = [ck["content_with_weight"] for ck in kbinfos["chunks"]]
+
+    chat_logger.info(
+        "{}->{}".format(" ".join(question), "\n->".join(knowledges)))
+    
+    if not knowledges:
+        empty_res = "empty_response"
+        yield {"answer": empty_res, "reference": kbinfos}
+        return {"answer": empty_res, "reference": kbinfos}
+    
+    gen_conf= {
+        "temperature": 0.1,
+        "top_p": 0.3,
+        "presence_penalty": 0.4,
+        "frequency_penalty": 0.7,
+        "max_tokens": 512
+    }
+
+    if stream:
+        last_ans = ""
+        answer = ""
+        for ans in chat_mdl.chat_streamly(prompt, [], gen_conf):
+            answer = ans
+            delta_ans = ans[len(last_ans):]
+            if num_tokens_from_string(delta_ans) < 12:
+                continue
+            last_ans = answer
+            yield {"answer": answer, "reference": {}}
+        delta_ans = answer[len(last_ans):]
+        if delta_ans:
+            yield {"answer": answer, "reference": {}}
+        yield answer
+    else:
+        answer = chat_mdl.chat(prompt, [], gen_conf)
+        res = answer
+        yield res
+        
 
 def chat(dialog, messages, stream=True, **kwargs):
     assert messages[-1]["role"] == "user", "The last content of this conversation is not from user."
@@ -217,6 +288,9 @@ def chat(dialog, messages, stream=True, **kwargs):
         if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
             answer += " Please set LLM API-Key in 'User Setting -> Model Providers -> API-Key'"
         return {"answer": answer, "reference": refs, "prompt": prompt}
+    print("prompt")
+    print(prompt)
+    print("prompt")
 
     if stream:
         last_ans = ""

@@ -20,11 +20,6 @@ from api.db import LLMType
 from api.db.db_models import DB, UserTenant
 from api.db.db_models import LLMFactories, LLM, TenantLLM
 from api.db.services.common_service import CommonService
-import os
-
-deep_seek_api_key = os.getenv("DEEP_SEEK_API")
-openai_api_key = os.getenv("openai_api_key")
-gemini_api_key = os.getenv("gemini_api_key")
 
 class LLMFactoriesService(CommonService):
     model = LLMFactories
@@ -62,7 +57,7 @@ class TenantLLMService(CommonService):
         return list(objs)
 
 
-    def model_instance(llm_factory, llm_type, llm_name=None, lang="Chinese"):
+    def model_instance(llm_factory, llm_type, llm_name=None, api_key=None):
         if llm_type == LLMType.EMBEDDING.value:
             mdlnm = llm_name
         elif llm_type == LLMType.SPEECH2TEXT.value:
@@ -93,16 +88,6 @@ class TenantLLMService(CommonService):
                     if not mdlnm:
                         raise LookupError(f"Type of {llm_type} model is not set.")
                     #raise LookupError("Model({}) not authorized".format(mdlnm))
-
-        if not model_config:
-            if llm_factory == "OpenAI":
-                api_key = openai_api_key
-            elif llm_factory == "Gemini":
-                api_key = gemini_api_key
-            elif llm_factory == "DeepSeek":
-                api_key = deep_seek_api_key
-            else:
-                raise LookupError("Model({}) not authorized".format(mdlnm))
 
             model_config = {
             "llm_factory": llm_factory,
@@ -196,11 +181,11 @@ class TenantLLMService(CommonService):
 
 
 class LLMBundle(object):
-    def __init__(self, chat_llm_factory, llm_type, llm_name=None, lang="Chinese"):
+    def __init__(self, llm_factory, llm_type, llm_name=None, api_key=None):
         self.llm_type = llm_type
         self.llm_name = llm_name
         print(self.llm_name)
-        self.mdl = TenantLLMService.model_instance(chat_llm_factory, llm_type, llm_name, lang=lang)
+        self.mdl = TenantLLMService.model_instance(llm_factory, llm_type, llm_name, api_key)
         assert self.mdl, "Can't find model for {}/{}".format(llm_type, llm_name)
         self.max_length = 512
         for lm in LLMService.query(llm_name=llm_name):
