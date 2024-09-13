@@ -186,28 +186,26 @@ def create():
 
 @manager.route('/list_v2', methods=['GET'])
 def list_docs_v2():
+    tenant_id = request.args.get("tenant_id")
     kb_id = request.args.get("kb_id")
+
+    if not tenant_id:
+        return get_json_result(
+            data=False, retmsg='Lack of "Tenant ID"', retcode=RetCode.ARGUMENT_ERROR)
+
     if not kb_id:
         return get_json_result(
             data=False, retmsg='Lack of "KB ID"', retcode=RetCode.ARGUMENT_ERROR)
-    tenants = UserTenantService.query(user_id=current_user.id)
-    for tenant in tenants:
-        if KnowledgebaseService.query(tenant_id=tenant.tenant_id, id=kb_id):
-            break
-    else:
-        return get_json_result(
-            data=False, retmsg=f'Only owner of knowledgebase authorized for this operation.',
-            retcode=RetCode.OPERATING_ERROR)
-    keywords = request.args.get("keywords", "")
 
     page_number = int(request.args.get("page", 1))
     items_per_page = int(request.args.get("page_size", 15))
-    orderby = request.args.get("orderby", "create_time")
-    desc = request.args.get("desc", True)
     try:
-        docs, tol = DocumentService.get_by_kb_id(
-            kb_id, page_number, items_per_page, orderby, desc, keywords)
-        return get_json_result(data={"total": tol, "docs": docs})
+        doc_ids = retrievaler.doc_list_by_kb_id(tenant_id, kb_id)
+        total = len(doc_ids)
+        from_value = (page_number - 1) * items_per_page
+        doc_ids = doc_ids[from_value:from_value+items_per_page]
+
+        return get_json_result(data={"total": total, "docs": doc_ids})
     except Exception as e:
         return server_error_response(e)
     

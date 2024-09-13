@@ -485,3 +485,19 @@ class Dealer:
         
         print(count)
         return res
+    
+    def doc_list_by_kb_id(self, tenant_id, kb_id):
+        max_count = 1024
+        s = Search(using=self.es, index=index_name(tenant_id))
+
+        s = s.query(Q("term", kb_id=kb_id))[:max_count]
+        s = s.to_dict()
+        es_res = self.es.search(s, timeout="600s", src=True)
+        doc_ids = set()
+
+        for chunk in es_res['hits']['hits']:
+            doc_id = chunk['_source'].get('doc_id')
+            if doc_id:
+                doc_ids.add(doc_id)
+
+        return list(doc_ids)
