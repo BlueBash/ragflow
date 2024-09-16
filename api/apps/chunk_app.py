@@ -135,6 +135,31 @@ def list_chunk():
         return server_error_response(e)
 
 
+@manager.route('/get_v2', methods=['GET'])
+def get_v2():
+    chunk_id = request.args["chunk_id"]
+    tenant_id = request.args["tenant_id"]
+    try:
+        res = ELASTICSEARCH.get(chunk_id, search.index_name(tenant_id))
+        if not res.get("found"):
+            return server_error_response("Chunk not found")
+        id = res["_id"]
+        res = res["_source"]
+        res["chunk_id"] = id
+        k = []
+        for n in res.keys():
+            if re.search(r"(_vec$|_sm_|_tks|_ltks)", n):
+                k.append(n)
+        for n in k:
+            del res[n]
+
+        return get_json_result(data=res)
+    except Exception as e:
+        if str(e).find("NotFoundError") >= 0:
+            return get_json_result(data=False, retmsg=f'Chunk not found!',
+                                   retcode=RetCode.DATA_ERROR)
+        return server_error_response(e)
+
 @manager.route('/get', methods=['GET'])
 @login_required
 def get():
