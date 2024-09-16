@@ -133,7 +133,7 @@ def list_convsersation():
 
 
 
-@manager.route('/completion1', methods=['POST'])
+@manager.route('/completion_v2', methods=['POST'])
 def completion1():
     req = request.json
     stream = req.get("stream", "True")
@@ -148,7 +148,7 @@ def completion1():
                                            ensure_ascii=False) + "\n\n"
             yield "data:" + json.dumps({"retcode": 0, "retmsg": "", "data": True}, ensure_ascii=False) + "\n\n"
 
-        if stream=="True":
+        if stream:
             print("inside stream...")
             resp = Response(stream(), mimetype="text/event-stream")
             resp.headers.add_header("Cache-control", "no-cache")

@@ -246,9 +246,7 @@ class LLMBundle(object):
     def chat_streamly(self, system, history, gen_conf):
         for txt in self.mdl.chat_streamly(system, history, gen_conf):
             if isinstance(txt, int):
-                if not TenantLLMService.increase_usage(
-                        self.tenant_id, self.llm_type, txt, self.llm_name):
-                    database_logger.error(
-                        "Can't update token usage for {}/CHAT".format(self.tenant_id))
-                return
+                msg = "number of token used:- "+ str(txt)
+                print(msg)
+                return msg
             yield txt
