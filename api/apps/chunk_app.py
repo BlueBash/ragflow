@@ -253,6 +253,40 @@ def rm():
         return server_error_response(e)
 
 
+@manager.route('/create_v2', methods=['POST'])
+@validate_request("tenant_id", "doc_id", "kb_id", "name" ,"content_with_weight")
+def create1():
+    req = request.json
+    tenant_id = req["tenant_id"]
+    kb_id = req["kb_id"]
+    name = req["name"]
+    
+    md5 = hashlib.md5()
+    md5.update((req["content_with_weight"] + req["doc_id"]).encode("utf-8"))
+    chunck_id = md5.hexdigest()
+    d = {"id": chunck_id, "content_ltks": rag_tokenizer.tokenize(req["content_with_weight"]),
+         "content_with_weight": req["content_with_weight"]}
+    d["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(d["content_ltks"])
+    d["important_kwd"] = req.get("important_kwd", [])
+    d["important_tks"] = rag_tokenizer.tokenize(" ".join(req.get("important_kwd", [])))
+    d["create_time"] = str(datetime.datetime.now()).replace("T", " ")[:19]
+    d["create_timestamp_flt"] = datetime.datetime.now().timestamp()
+
+    try:
+        d["kb_id"] = [kb_id]
+        d["docnm_kwd"] = name
+        d["doc_id"] = req["doc_id"]
+
+        embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, req["embd_id"], req["embd_api_key"])
+
+        v, c = embd_mdl.encode([name, req["content_with_weight"]])
+        v = 0.1 * v[0] + 0.9 * v[1]
+        d["q_%d_vec" % len(v)] = v.tolist()
+        ELASTICSEARCH.upsert([d], search.index_name(tenant_id))
+        return get_json_result(data={"chunk_id": chunck_id})
+    except Exception as e:
+        return server_error_response(e)
+
 @manager.route('/create', methods=['POST'])
 @login_required
 @validate_request("doc_id", "content_with_weight")
