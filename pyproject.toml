@@ -66,6 +66,7 @@ volcengine = "^1.0.150"
 groq = "^0.10.0"
 minio = "^7.2.8"
 peft = "^0.12.0"
+html2text = "^2024.2.26"
 
 
 [tool.poetry.group.dev.dependencies]

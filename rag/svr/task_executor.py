@@ -48,7 +48,7 @@ from rag.nlp import search, rag_tokenizer
 from io import BytesIO
 import pandas as pd
 
-from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email
+from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website
 
 from api.db import LLMType, ParserType
 from api.db.services.document_service import DocumentService
@@ -73,7 +73,8 @@ FACTORY = {
     ParserType.ONE.value: one,
     ParserType.AUDIO.value: audio,
     ParserType.EMAIL.value: email,
-    ParserType.KG.value: knowledge_graph
+    ParserType.KG.value: knowledge_graph,
+    ParserType.WEBSITE.value: website
 }
 
 CONSUMEER_NAME = "task_consumer_" + ("0" if len(sys.argv) < 2 else sys.argv[1])
@@ -185,7 +186,10 @@ def build1(row):
     try:
         st = timer()
         url = row["url"]
-        binary = get_binary_from_url(url)
+        if row["parser_id"]!="website":
+            binary = get_binary_from_url(url)
+        else:
+            binary = url
         print("binary done")
 
     except Exception as e:
@@ -227,25 +231,9 @@ def build1(row):
         if not d.get("image"):
             docs.append(d)
             continue
-
-        try:
-            output_buffer = BytesIO()
-            if isinstance(d["image"], bytes):
-                output_buffer = BytesIO(d["image"])
-            else:
-                d["image"].save(output_buffer, format='JPEG')
-
-            st = timer()
-            MINIO.put(row["kb_id"], d["_id"], output_buffer.getvalue())
-            el += timer() - st
-        except Exception as e:
-            cron_logger.error(str(e))
-            traceback.print_exc()
-
-        d["img_id"] = "{}-{}".format(row["kb_id"], d["_id"])
-        del d["image"]
-        docs.append(d)
-    cron_logger.info("MINIO PUT({}):{}".format(row["name"], el))
+        else:
+            del d["image"]
+            docs.append(d)
     print("done cks")
     return docs
 
@@ -348,36 +336,28 @@ def init_kb(row):
 
 def embedding1(docs, mdl, parser_config={}):
     batch_size = 32
-    tts, cnts = [rmSpace(d["title_tks"]) for d in docs if d.get("title_tks")], [
-        re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", d["content_with_weight"]) for d in docs]
+    tts, cnts = [rmSpace(d["title_tks"]) for d in docs if d.get("title_tks")], [re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", d["content_with_weight"]) for d in docs]
     tk_count = 0
-    print("start embedding1 fun")
+    print("start embedding1 function...")
     if len(tts) == len(cnts):
-        tts_ = np.array([])
-        for i in range(0, len(tts), batch_size):
-            vts, c = mdl.encode(tts[i: i + batch_size])
-            if len(tts_) == 0:
-                tts_ = vts
-            else:
-                tts_ = np.concatenate((tts_, vts), axis=0)
-            tk_count += c
-            print(0.6 + 0.1 * (i + 1) / len(tts))
-        tts = tts_
+        vts, c = mdl.encode(tts[0])
+        tts = np.tile(vts[0], (len(tts), 1))
 
     cnts_ = np.array([])
-    for i in range(0, len(cnts), batch_size):
+    cnts_len = len(cnts)
+    for i in range(0, cnts_len, batch_size):
         vts, c = mdl.encode(cnts[i: i + batch_size])
         if len(cnts_) == 0:
             cnts_ = vts
         else:
             cnts_ = np.concatenate((cnts_, vts), axis=0)
         tk_count += c
-        print(0.7 + 0.2 * (i + 1) / len(cnts))
+        progress = ((i + batch_size) / cnts_len) * 100
+        print(f"Embediing Progress: {progress:.2f}%")
     cnts = cnts_
 
     title_w = float(parser_config.get("filename_embd_weight", 0.1))
-    vects = (title_w * tts + (1 - title_w) *
-             cnts) if len(tts) == len(cnts) else cnts
+    vects = (title_w * tts + (1 - title_w) *cnts) if len(tts) == len(cnts) else cnts
     print("len of vects:-", len(vects))
 
     assert len(vects) == len(docs)
@@ -504,13 +484,14 @@ def main1(r):
 
     init_kb(r)
     chunk_count = len(set([c["_id"] for c in cks]))
+    print("chunk c", chunk_count)
     st = timer()
     es_r = ""
     es_bulk_size = 4
     for b in range(0, len(cks), es_bulk_size):
         es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
-        if b % 128 == 0:
-            print(0.8 + 0.1 * (b + 1) / len(cks))
+        progress = ((b + es_bulk_size) / len(cks)) * 100
+        print(f"Embediing Progress: {progress:.2f}%")
 
     cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
     if es_r:

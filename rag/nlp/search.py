@@ -470,20 +470,17 @@ class Dealer:
         es_res = self.es.search(s, timeout="600s", src=True)
         res = []
         count = 0
-        key_to_delete_status = True
-        key_to_delete = []
         for index, chunk in enumerate(es_res['hits']['hits']):
-            chunk_source = chunk['_source']
-            
-            if key_to_delete_status:
-                key_to_delete = [key for key in chunk_source if key.startswith('q_') and key.endswith('_vec')]
-                key_to_delete_status = False
-            del chunk_source[key_to_delete[0]]
+            chunk_source = chunk["_source"]
+            chunk_source["chunk_id"] = chunk["_id"]
+
+            keys_to_check = list(chunk_source.keys())
+            for n in keys_to_check:
+                if re.search("_vec$", n):
+                    del chunk_source[n]
             
             res.append(chunk_source)
             count += 1
-        
-        print(count)
         return res
     
     def doc_list_by_kb_id(self, tenant_id, kb_id):

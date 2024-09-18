@@ -88,6 +88,7 @@ class ParserType(StrEnum):
     AUDIO = "audio"
     EMAIL = "email"
     KG = "knowledge_graph"
+    WEBSITE = "website"
 
 
 class FileSource(StrEnum):
