@@ -56,86 +56,32 @@ class TenantLLMService(CommonService):
 
         return list(objs)
 
+    @staticmethod
+    def model_instance(llm_factory, llm_type, llm_name, api_key=None, api_base=None):
 
-    def model_instance(llm_factory, llm_type, llm_name=None, api_key=None):
-        if llm_type == LLMType.EMBEDDING.value:
-            mdlnm = llm_name
-        elif llm_type == LLMType.SPEECH2TEXT.value:
-            mdlnm = llm_name
-        elif llm_type == LLMType.IMAGE2TEXT.value:
-            mdlnm = llm_name
-        elif llm_type == LLMType.CHAT.value:
-            mdlnm = llm_name
-        elif llm_type == LLMType.RERANK:
-            mdlnm = llm_name
-        elif llm_type == LLMType.TTS:
-            mdlnm = llm_name
-        else:
-            assert False, "LLM type error"
-        print("mdlnm:-- ",mdlnm)
-
-        model_config=False
-        if not model_config:
-            print(model_config)
-            if llm_type in [LLMType.EMBEDDING, LLMType.RERANK]:
-                llm = LLMService.query(llm_name=llm_name if llm_name else mdlnm)
-                if llm and llm[0].fid in ["Youdao", "FastEmbed", "BAAI"]:
-                    model_config = {"llm_factory": llm[0].fid, "api_key":"", "llm_name": llm_name if llm_name else mdlnm, "api_base": ""}
-            if not model_config:
-                if llm_name == "flag-embedding":
-                    model_config = {"llm_factory": "Tongyi-Qianwen", "api_key": "", "llm_name": llm_name, "api_base": ""}
-                else:
-                    if not mdlnm:
-                        raise LookupError(f"Type of {llm_type} model is not set.")
-                    #raise LookupError("Model({}) not authorized".format(mdlnm))
-
-            model_config = {
-            "llm_factory": llm_factory,
-            "api_key": api_key, 
-            "llm_name": llm_name,
-            "api_base": ""
-            }
-
+        model_config = {
+        "llm_factory": llm_factory,
+        "api_key": api_key, 
+        "llm_name": llm_name,
+        "api_base": api_base
+        }
         print(model_config)
 
         if llm_type == LLMType.EMBEDDING.value:
             if model_config["llm_factory"] not in EmbeddingModel:
                 return
-            return EmbeddingModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+            return EmbeddingModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
 
         if llm_type == LLMType.RERANK:
             if model_config["llm_factory"] not in RerankModel:
                 return
-            return RerankModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+            return RerankModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
 
-        if llm_type == LLMType.IMAGE2TEXT.value:
-            if model_config["llm_factory"] not in CvModel:
-                return
-            return CvModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], lang,
-                base_url=model_config["api_base"]
-            )
-        
         if llm_type == LLMType.CHAT.value:
+            if model_config["llm_factory"] not in ChatModel:
+                return
             return ChatModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
 
-        if llm_type == LLMType.SPEECH2TEXT:
-            if model_config["llm_factory"] not in Seq2txtModel:
-                return
-            return Seq2txtModel[model_config["llm_factory"]](
-                model_config["api_key"], model_config["llm_name"], lang,
-                base_url=model_config["api_base"]
-            )
-        if llm_type == LLMType.TTS:
-            if model_config["llm_factory"] not in TTSModel:
-                return
-            return TTSModel[model_config["llm_factory"]](
-                model_config["api_key"],
-                model_config["llm_name"],
-                base_url=model_config["api_base"],
-            )
 
     @classmethod
     @DB.connection_context()
