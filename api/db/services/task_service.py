@@ -132,7 +132,7 @@ class TaskService(CommonService):
                     cls.model.id == id).execute()
 
 
-def queue_tasks2(doc):
+def queue_tasks_v2(doc):
     tsks = []
     tsks.append(doc)
 

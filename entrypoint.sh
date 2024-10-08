@@ -9,7 +9,7 @@ fi
 
 function task_exe(){
     while [ 1 -eq 1 ];do
-      $PY rag/svr/task_executor.py ;
+      $PY rag/svr/task_executor_v2.py ;
     done
 }
 

@@ -34,7 +34,7 @@ from api.db.services.dialog_service import DialogService, ConversationService
 from api.db.services.file2document_service import File2DocumentService
 from api.db.services.file_service import FileService
 from api.db.services.llm_service import LLMBundle
-from api.db.services.task_service import TaskService, queue_tasks, queue_tasks2
+from api.db.services.task_service import TaskService, queue_tasks, queue_tasks_v2
 from api.db.services.user_service import TenantService, UserTenantService
 from graphrag.mind_map_extractor import MindMapExtractor
 from rag.app import naive
@@ -356,7 +356,7 @@ def get_chunk_by_doc_id(doc_id):
 
 @manager.route('/run_v2', methods=['POST'])
 @validate_request("tenant_id", "kb_id", "documents")
-def run1():
+def run_v2():
     req = request.json
     tenant_id = req["tenant_id"]
     try:
@@ -373,43 +373,7 @@ def run1():
             new_doc["parser_id"] = doc.get("parser_id")
             new_doc["parser_config"] = doc.get("parser_config")
             new_doc["language"] = "English"
-
-            print("doc")
-            print(new_doc)
-            print("doc")
-            
-            from rag.svr.task_executor import main1
-            main1(new_doc)
-
-        return get_json_result(data=True)
-    except Exception as e:
-        return server_error_response(e)
-
-
-@manager.route('/run_v3', methods=['POST'])
-@validate_request("tenant_id", "kb_id", "documents")
-def run2():
-    req = request.json
-    tenant_id = req["tenant_id"]
-    try:
-        for doc in req["documents"]:
-            doc_id = doc["id"]
-            doc_url = doc["url"]
-            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-
-            new_doc = req.copy()
-            new_doc.pop("documents", None)
-            new_doc["doc_id"] = doc_id
-            new_doc["url"] = doc_url
-            new_doc["name"] = doc_url
-            new_doc["parser_id"] = doc.get("parser_id")
-            new_doc["parser_config"] = doc.get("parser_config")
-            new_doc["language"] = "English"
-
-            print("doc")
-            print(new_doc)
-            print("doc")
-            queue_tasks2(new_doc)
+            queue_tasks_v2(new_doc)
 
         return get_json_result(data=True)
     except Exception as e:
