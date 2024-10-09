@@ -65,7 +65,6 @@ class TenantLLMService(CommonService):
         "llm_name": llm_name,
         "api_base": api_base
         }
-        print(model_config)
 
         if llm_type == LLMType.EMBEDDING.value:
             if model_config["llm_factory"] not in EmbeddingModel:
@@ -126,12 +125,36 @@ class TenantLLMService(CommonService):
         return list(objs)
 
 
+def model_instance(llm_factory, llm_type, llm_name, api_key=None, api_base=None):
+
+        model_config = {
+        "llm_factory": llm_factory,
+        "api_key": api_key, 
+        "llm_name": llm_name,
+        "api_base": api_base
+        }
+
+        if llm_type == LLMType.EMBEDDING.value:
+            if model_config["llm_factory"] not in EmbeddingModel:
+                return
+            return EmbeddingModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+
+        if llm_type == LLMType.RERANK:
+            if model_config["llm_factory"] not in RerankModel:
+                return
+            return RerankModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+
+        if llm_type == LLMType.CHAT.value:
+            if model_config["llm_factory"] not in ChatModel:
+                return
+            return ChatModel[model_config["llm_factory"]](model_config["api_key"], model_config["llm_name"], base_url=model_config["api_base"])
+        
+
 class LLMBundle(object):
     def __init__(self, llm_factory, llm_type, llm_name=None, api_key=None):
         self.llm_type = llm_type
         self.llm_name = llm_name
-        print(self.llm_name)
-        self.mdl = TenantLLMService.model_instance(llm_factory, llm_type, llm_name, api_key)
+        self.mdl = model_instance(llm_factory, llm_type, llm_name, api_key)
         assert self.mdl, "Can't find model for {}/{}".format(llm_type, llm_name)
         self.max_length = 512
         for lm in LLMService.query(llm_name=llm_name):

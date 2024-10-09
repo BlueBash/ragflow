@@ -133,12 +133,7 @@ class TaskService(CommonService):
 
 
 def queue_tasks_v2(doc):
-    tsks = []
-    tsks.append(doc)
-
-    for t in tsks:
-        assert REDIS_CONN.queue_product(SVR_QUEUE_NAME, message=t), "Can't access Redis. Please check the Redis' status."
-
+    assert REDIS_CONN.queue_product(SVR_QUEUE_NAME, message=doc), "Can't access Redis. Please check the Redis' status."
 
 
 def queue_tasks(doc, bucket, name):

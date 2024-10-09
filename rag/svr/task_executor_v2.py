@@ -87,9 +87,11 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
     #     msg += " [Canceled]"
     #     prog = -1
     progress_message = progress_message+ "\n "+ msg
+    if prog==0.1:
+        progress_message=msg
     d = {"progress_msg": progress_message}
     d["progress"] = prog
-    if d["progress"]==1.0:
+    if prog==1.0:
         d["status"]=True
     else:
         d["status"]=False
@@ -325,6 +327,7 @@ def main():
             callback(prog=0.8 + 0.1 * (b + 1) / len(cks), msg="")
 
     cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+    use_raptor = r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False)
     if es_r:
         callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
         ELASTICSEARCH.deleteByQuery(
@@ -332,16 +335,18 @@ def main():
         cron_logger.error(str(es_r))
     else:
         # check cancel job status
-        callback(1., "Done!")
+        if use_raptor:
+            callback(0.9, "Start Raptor")
+        else:
+            callback(1., "Done!")
         cron_logger.info(
-            "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(
-                r["doc_id"], tk_count, len(cks), timer() - st))
+            "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(r["doc_id"], tk_count, len(cks), timer() - st))
     import time
     time.sleep(2)
 
 
     #RAPTOR
-    if r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False):
+    if use_raptor:
         try:
             chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, r["llm_id"], r["llm_api_key"])
             cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback)
@@ -350,7 +355,6 @@ def main():
             cron_logger.error(str(e))
 
         init_kb(r)
-        chunk_count = len(set([c["_id"] for c in cks]))
         st = timer()
         es_r = ""
         es_bulk_size = 4
@@ -366,7 +370,6 @@ def main():
                 Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
             cron_logger.error(str(es_r))
         callback(1., "Done RAPTOR!")
-        print("all done............")
 
 
 def report_status():
