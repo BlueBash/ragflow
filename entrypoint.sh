@@ -1,6 +1,6 @@
 
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
-export PYTHONPATH="/home/narendras/code/ragflow"
+export PYTHONPATH=$(pwd)
 
 PY=python3
 if [[ -z "$WS" || $WS -lt 1 ]]; then

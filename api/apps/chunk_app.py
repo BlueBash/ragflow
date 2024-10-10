@@ -35,6 +35,7 @@ from api.settings import RetCode, retrievaler, kg_retrievaler
 from api.utils.api_utils import get_json_result
 import hashlib
 import re
+from api.db.services.llm_service import LLMBundle
 
 
 @manager.route('/list_v2', methods=['POST'])
@@ -418,15 +419,15 @@ def retrieval_test1():
     top = int(req.get("top_k", 1024))
     tenant_id = req["tenant_id"]
     try:
-        embd_mdl = TenantLLMService.model_instance(req["embd_factory"], LLMType.EMBEDDING, llm_name=req["embd_id"], api_key=req["embd_api_key"])
+        embd_mdl = LLMBundle(req["embd_factory"], LLMType.EMBEDDING, req["embd_id"], req["embd_api_key"])
 
         rerank_mdl = None
         if req.get("rerank_id"):
             print("rerank_mdl is selecting........")
-            rerank_mdl = TenantLLMService.model_instance(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"], api_key=req["rerank_api_key"])
+            rerank_mdl = LLMBundle(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"], api_key=req["rerank_api_key"])
 
         if req.get("keyword", False):
-            chat_mdl = TenantLLMService.model_instance(req["llm_factory"], LLMType.CHAT, llm_name=req["llm_id"], api_key=req["llm_api_key"])
+            chat_mdl = LLMBundle(req["llm_factory"], LLMType.CHAT, llm_name=req["llm_id"], api_key=req["llm_api_key"])
             question += keyword_extraction(chat_mdl, question)
 
         parser_id = "normal"  # pass if it is Graph
@@ -468,8 +469,7 @@ def retrieval_test():
         if not e:
             return get_data_error_result(retmsg="Knowledgebase not found!")
 
-        embd_mdl = TenantLLMService.model_instance(
-            kb.tenant_id, LLMType.EMBEDDING.value, llm_name=kb.embd_id)
+        embd_mdl =TenantLLMService.model_instance(kb.tenant_id, LLMType.EMBEDDING.value, llm_name=kb.embd_id)
 
         rerank_mdl = None
         if req.get("rerank_id"):

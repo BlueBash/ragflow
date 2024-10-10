@@ -157,9 +157,6 @@ class LLMBundle(object):
         self.mdl = model_instance(llm_factory, llm_type, llm_name, api_key)
         assert self.mdl, "Can't find model for {}/{}".format(llm_type, llm_name)
         self.max_length = 512
-        for lm in LLMService.query(llm_name=llm_name):
-            self.max_length = lm.max_tokens
-            break
 
     def encode(self, texts: list, batch_size=32):
         emd, used_tokens = self.mdl.encode(texts, batch_size)
@@ -167,43 +164,23 @@ class LLMBundle(object):
 
     def encode_queries(self, query: str):
         emd, used_tokens = self.mdl.encode_queries(query)
-        if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
-            database_logger.error(
-                "Can't update token usage for {}/EMBEDDING".format(self.tenant_id))
         return emd, used_tokens
 
     def similarity(self, query: str, texts: list):
         sim, used_tokens = self.mdl.similarity(query, texts)
-        if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
-            database_logger.error(
-                "Can't update token usage for {}/RERANK".format(self.tenant_id))
         return sim, used_tokens
 
     def describe(self, image, max_tokens=300):
         txt, used_tokens = self.mdl.describe(image, max_tokens)
-        if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
-            database_logger.error(
-                "Can't update token usage for {}/IMAGE2TEXT".format(self.tenant_id))
         return txt
 
     def transcription(self, audio):
         txt, used_tokens = self.mdl.transcription(audio)
-        if not TenantLLMService.increase_usage(
-                self.tenant_id, self.llm_type, used_tokens):
-            database_logger.error(
-                "Can't update token usage for {}/SEQUENCE2TXT".format(self.tenant_id))
         return txt
 
     def tts(self, text):
         for chunk in self.mdl.tts(text):
             if isinstance(chunk,int):
-                if not TenantLLMService.increase_usage(
-                    self.tenant_id, self.llm_type, chunk, self.llm_name):
-                        database_logger.error(
-                            "Can't update token usage for {}/TTS".format(self.tenant_id))
                 return
             yield chunk     
 
