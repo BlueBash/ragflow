@@ -5,7 +5,6 @@ import traceback
 from api import utils
 from api.apps import app
 from werkzeug.serving import run_simple
-from api.db.runtime_config import RuntimeConfig
 from concurrent.futures import ThreadPoolExecutor
 from api.settings import HOST, HTTP_PORT, access_logger, stat_logger
 
@@ -30,7 +29,7 @@ if __name__ == '__main__':
         werkzeug_logger = logging.getLogger("werkzeug")
         for h in access_logger.handlers:
             werkzeug_logger.addHandler(h)
-        run_simple(hostname=HOST, port=HTTP_PORT, application=app, threaded=True, use_reloader=RuntimeConfig.DEBUG, use_debugger=RuntimeConfig.DEBUG)
+        run_simple(hostname=HOST, port=HTTP_PORT, application=app, threaded=True)
     except Exception:
         traceback.print_exc()
         os.kill(os.getpid(), signal.SIGKILL)

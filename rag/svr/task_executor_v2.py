@@ -96,8 +96,11 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
     else:
         d["status"]=False
     try:
-        print("status::::::::::::::::::::->",d)
-        update_task_status(doc_id, d)
+        print("status::::::::::::::::::::->")
+        print(d)
+        print("status::::::::::::::::::::->")
+        print()
+        #update_task_status(doc_id, d)
         pass
     except Exception as e:
         cron_logger.error("set_progress:({}), {}".format(doc_id, str(e)))
@@ -184,7 +187,6 @@ def build(row):
         "doc_id": row["doc_id"],
         "kb_id": [str(row["kb_id"])]
     }
-    el = 0
     for ck in cks:
         d = copy.deepcopy(doc)
         d.update(ck)
