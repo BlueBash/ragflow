@@ -157,8 +157,8 @@ def build(row):
             try:
                 binary = get_binary_from_url(doc_id, url)
             except Exception as e:
-                callback(-1, f"Get file from minio: { str(e).replace("'", "")}")
-                cron_logger.error(f"Error in file {row["url"]}: {str(e)}")
+                callback(-1, f"Get file from url: { str(e)}")
+                cron_logger.error(f"Error in file {row['url']}: {str(e)}")
                 return
         else:
             binary = url
