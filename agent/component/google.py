@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 from abc import ABC
-from serpapi import GoogleSearch
+#from serpapi import GoogleSearch
 import pandas as pd
 from agent.settings import DEBUG
 from agent.component.base import ComponentBase, ComponentParamBase
@@ -78,13 +78,14 @@ class Google(ComponentBase, ABC):
         ans = " - ".join(ans["content"]) if "content" in ans else ""
         if not ans:
             return Google.be_output("")
-
+        google_res=""
         try:
-            client = GoogleSearch(
-                {"engine": "google", "q": ans, "api_key": self._param.api_key, "gl": self._param.country,
-                 "hl": self._param.language, "num": self._param.top_n})
-            google_res = [{"content": '<a href="' + i["link"] + '">' + i["title"] + '</a>    ' + i["snippet"]} for i in
-                          client.get_dict()["organic_results"]]
+            # client = GoogleSearch(
+            #     {"engine": "google", "q": ans, "api_key": self._param.api_key, "gl": self._param.country,
+            #      "hl": self._param.language, "num": self._param.top_n})
+            # google_res = [{"content": '<a href="' + i["link"] + '">' + i["title"] + '</a>    ' + i["snippet"]} for i in
+            #               client.get_dict()["organic_results"]]
+            pass
         except Exception as e:
             return Google.be_output("**ERROR**: Existing Unavailable Parameters!")
 

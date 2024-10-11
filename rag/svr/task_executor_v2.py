@@ -301,7 +301,7 @@ def main():
         return
     # TODO: exception handler
     ## set_progress(r["did"], -1, "ERROR: ")
-    callback(msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
+    callback(0.7,msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
     try:
         embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
     except Exception as e:
@@ -315,7 +315,7 @@ def main():
         cron_logger.error(str(e))
         tk_count = 0
     cron_logger.info("Embedding elapsed({}): {:.2f}".format(r["name"], timer() - st))
-    callback(msg="Finished embedding({:.2f})! Start to build index!".format(timer() - st))
+    callback(0.75, msg="Finished embedding({:.2f})! Start to build index!".format(timer() - st))
 
     init_kb(r)
     chunk_count = len(set([c["_id"] for c in cks]))

@@ -15,7 +15,7 @@
 #
 from abc import ABC
 import pandas as pd
-import pywencai
+#import pywencai
 from agent.component.base import ComponentBase, ComponentParamBase
 
 
@@ -48,7 +48,8 @@ class WenCai(ComponentBase, ABC):
 
         try:
             wencai_res = []
-            res = pywencai.get(query=ans, query_type=self._param.query_type, perpage=self._param.top_n)
+            #res = pywencai.get(query=ans, query_type=self._param.query_type, perpage=self._param.top_n)
+            res =""
             if isinstance(res, pd.DataFrame):
                 wencai_res.append({"content": res.to_markdown()})
             if isinstance(res, dict):

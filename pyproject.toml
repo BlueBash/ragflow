@@ -84,6 +84,7 @@ deepl = "^1.18.0"
 graspologic = "^3.4.1"
 future = "^1.0.0"
 editdistance = "^0.8.1"
+akshare = "^1.14.93"
 
 
 [tool.poetry.group.dev.dependencies]

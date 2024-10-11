@@ -29,7 +29,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --fix-missing nodejs nginx ffmpeg libsm6 libxext6 libgl1
+    apt-get install -y --fix-missing nginx ffmpeg libsm6 libxext6 libgl1
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
