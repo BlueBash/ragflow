@@ -14,39 +14,10 @@ minio:
   password: 'infini_rag_flow'
   host: 'localhost:9000'
 es:
-  hosts: 'http://es01:9200'
+  hosts: 'http://localhost:1200'
   username: 'elastic'
   password: 'infini_rag_flow'
 redis:
   db: 1
-  #password: 'infini_rag_flow'
+  password: 'infini_rag_flow'
   host: '172.17.0.1:6379'
-
-
-
-
-#local
-
-#   ragflow:
-#   host: 0.0.0.0
-#   http_port: 9380
-# mysql:
-#   name: 'rag_flow'
-#   user: 'root'
-#   password: 'infini_rag_flow'
-#   host: 'localhost'
-#   port: 5455
-#   max_connections: 100
-#   stale_timeout: 30
-# minio:
-#   user: 'rag_flow'
-#   password: 'infini_rag_flow'
-#   host: 'localhost:9000'
-# es:
-#   hosts: 'http://localhost:1200'
-#   username: 'elastic'
-#   password: 'infini_rag_flow'
-# redis:
-#   db: 1
-#   #password: 'infini_rag_flow'
-#   host: 'localhost:6379'
