@@ -37,7 +37,7 @@ class RedisDB:
         try:
             print(self.config.get("host","localhost:").split(":")[0])
             print(self.config.get("host", ":6379").split(":")[1])
-            self.REDIS = redis.StrictRedis(host="172.17.0.1",
+            self.REDIS = redis.StrictRedis(host=self.config.get("host","localhost:").split(":")[0],
                                      port=int(self.config.get("host", ":6379").split(":")[1]),
                                      db=int(self.config.get("db", 1)),
                                      #password=self.config.get("password"),
