@@ -286,7 +286,10 @@ def decrypt_database_config(
     if not database:
         database = get_base_config(name, {})
 
-    database[passwd_key] = decrypt_database_password(database[passwd_key])
+    if name=="redis":
+        database[passwd_key]="no_password"
+    else:
+        database[passwd_key] = decrypt_database_password(database[passwd_key])
     return database
 
 
