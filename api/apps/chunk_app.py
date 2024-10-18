@@ -436,7 +436,7 @@ def retrieval_test1():
         else:
             retr = kg_retrievaler
         
-        ranks = retr.retrieval(question, embd_mdl, tenant_id, [kb_id], page, size,
+        ranks = retr.retrieval(question, embd_mdl, tenant_id, kb_id, page, size,
                                similarity_threshold, vector_similarity_weight, top,
                                doc_ids, rerank_mdl=rerank_mdl)
         for c in ranks["chunks"]:
