@@ -175,7 +175,7 @@ def build(row):
                                                 (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
             return []
     except Exception as e:
-        cron_logger.error(f"[binary error] {row["name"]} , {str(e)} ")
+        cron_logger.error(f"[binary error] {row['name']} , {str(e)} ")
         set_progress(row["doc_id"], prog=-1, msg=str(e))
         return []
 
