@@ -13,6 +13,7 @@ import traceback
 import numpy as np
 import pandas as pd
 from functools import partial
+from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from api.settings import retrievaler
 from rag.settings import database_logger, SVR_QUEUE_NAME
@@ -30,6 +31,7 @@ from api.db.services.llm_service import LLMBundle
 from api.utils.file_utils import get_project_base_directory
 from rag.utils.redis_conn import REDIS_CONN
 
+load_dotenv()
 BATCH_SIZE = 64
 
 FACTORY = {
@@ -51,8 +53,6 @@ FACTORY = {
     ParserType.WEBSITE.value: website
 }
 
-ams_base_url = os.getenv('AMS_BASE_URL', 'http://localhost:3000')
-api_access_key = os.getenv('API_ACCESS_KEY', 'your_api_access_key_here')
 
 CONSUMEER_NAME = "task_consumer_" + ("0" if len(sys.argv) < 2 else sys.argv[1])
 PAYLOAD = None
@@ -60,6 +60,10 @@ progress_message=""
 
 
 def update_task_status(doc_id, data):
+    ams_base_url = os.getenv('AMS_ENDPOINT')
+    api_access_key = os.getenv('AUTHORIZATION_KEY')
+    print("ams",ams_base_url)
+    print(api_access_key)
     url = f'{ams_base_url}/api/v1/coordinator/datasets/{doc_id}'
     headers = {
         'Content-Type': 'application/json',
@@ -69,9 +73,9 @@ def update_task_status(doc_id, data):
     try:
         response = requests.put(url, headers=headers, json=data)
         if response.status_code == 200:
-            print("Update successful:", response.json())
+            cron_logger.info(f"Update successful: {response.json()}")
         else:
-            print("Failed to update:", response.status_code, response.text)
+            cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
 
     except Exception as e:
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
@@ -96,11 +100,10 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
     else:
         d["status"]=False
     try:
-        print("status::::::::::::::::::::->")
-        print(d)
-        print("status::::::::::::::::::::->")
-        print()
-        #update_task_status(doc_id, d)
+        cron_logger.info("status::::::::::::::::::::->")
+        cron_logger.info(str(d))
+        cron_logger.info("status::::::::::::::::::::->")
+        update_task_status(doc_id, d)
         pass
     except Exception as e:
         cron_logger.error("set_progress:({}), {}".format(doc_id, str(e)))
