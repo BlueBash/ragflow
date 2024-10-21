@@ -406,13 +406,13 @@ def create():
         return server_error_response(e)
     
 @manager.route('/retrieval_test_v2', methods=['POST'])
-@validate_request("tenant_id", "kb_id", "question")
+@validate_request("tenant_id", "kb_ids", "question")
 def retrieval_test1():
     req = request.json
     page = int(req.get("page", 1))
     size = int(req.get("size", 30))
     question = req["question"]
-    kb_id = req["kb_id"]
+    kb_ids = req["kb_ids"]
     doc_ids = req.get("doc_ids", [])
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
@@ -436,7 +436,7 @@ def retrieval_test1():
         else:
             retr = kg_retrievaler
         
-        ranks = retr.retrieval(question, embd_mdl, tenant_id, kb_id, page, size,
+        ranks = retr.retrieval(question, embd_mdl, tenant_id, kb_ids, page, size,
                                similarity_threshold, vector_similarity_weight, top,
                                doc_ids, rerank_mdl=rerank_mdl)
         for c in ranks["chunks"]:

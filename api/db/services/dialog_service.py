@@ -88,7 +88,7 @@ def llm_id2llm_type(llm_id):
 
 def chat1(req, stream=True):
     question = req["question"]
-    kb_id = req["kb_id"]
+    kb_ids = req["kb_ids"]
     doc_ids = req.get("doc_ids", [])
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
@@ -112,7 +112,7 @@ def chat1(req, stream=True):
     else:
         retr = kg_retrievaler
     
-    kbinfos = retr.retrieval(question, embd_mdl, tenant_id, [kb_id], 1, top_n,
+    kbinfos = retr.retrieval(question, embd_mdl, tenant_id, kb_ids, 1, top_n,
                             similarity_threshold, vector_similarity_weight, top_k,
                             doc_ids, rerank_mdl=rerank_mdl)
     
