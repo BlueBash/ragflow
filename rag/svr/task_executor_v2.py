@@ -169,9 +169,14 @@ def build(row):
     except Exception as e:
         return
     
-    if len(binary) > DOC_MAXIMUM_SIZE:
-        set_progress(row["doc_id"], prog=-1, msg="File size exceeds( <= %dMb )" %
-                                             (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
+    try:
+        if len(binary) > DOC_MAXIMUM_SIZE:
+            set_progress(row["doc_id"], prog=-1, msg="File size exceeds( <= %dMb )" %
+                                                (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
+            return []
+    except Exception as e:
+        cron_logger.error(f"[binary error] {row["name"]} , {str(e)} ")
+        set_progress(row["doc_id"], prog=-1, msg=str(e))
         return []
 
     try:
