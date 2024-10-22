@@ -57,6 +57,7 @@ FACTORY = {
 CONSUMEER_NAME = "task_consumer_" + ("0" if len(sys.argv) < 2 else sys.argv[1])
 PAYLOAD = None
 progress_message=""
+final_progress = 0
 
 
 def update_task_status(doc_id, data):
@@ -81,6 +82,7 @@ def update_task_status(doc_id, data):
 
 def set_progress(doc_id, prog=None, msg="Processing..."):
     global PAYLOAD
+    global final_progress
     global progress_message
     if prog is not None and prog < 0:
         msg = "[ERROR]" + msg
@@ -91,10 +93,11 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
     if msg:
         progress_message = progress_message+ "\n "+ msg
     if prog==0.1:
-        progress_message=msg
-    if prog is not None:
-        d["progress"] = prog
+        progress_message = msg
     d = {"progress_msg": progress_message}
+    if prog is not None:
+        final_progress = prog
+    d["progress"] = final_progress
     if prog==1.0:
         d["status"]=True
     else:
