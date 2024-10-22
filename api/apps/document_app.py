@@ -305,6 +305,28 @@ def change_status():
         return server_error_response(e)
 
 
+@manager.route('/rm_v2', methods=['POST'])
+@validate_request("tenant_id", "doc_id")
+def rm_v2():
+    req = request.json
+    tenant_id = req["tenant_id"]
+    doc_ids = req["doc_id"]
+    
+    if isinstance(doc_ids, str):
+        doc_ids = [doc_ids]
+    errors=""
+    for doc_id in doc_ids:
+        try:
+            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
+        except Exception as e:
+            errors += str(e)
+
+    if errors:
+        return get_json_result(data=False, retmsg=errors, retcode=RetCode.SERVER_ERROR)
+
+    return get_json_result(data=True)
+
+
 @manager.route('/rm', methods=['POST'])
 @login_required
 @validate_request("doc_id")

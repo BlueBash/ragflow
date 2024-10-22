@@ -62,8 +62,6 @@ progress_message=""
 def update_task_status(doc_id, data):
     ams_base_url = os.getenv('AMS_ENDPOINT')
     api_access_key = os.getenv('AUTHORIZATION_KEY')
-    print("ams",ams_base_url)
-    print(api_access_key)
     url = f'{ams_base_url}/api/v1/coordinator/datasets/{doc_id}'
     headers = {
         'Content-Type': 'application/json',
@@ -90,19 +88,19 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
     # if cancel:
     #     msg += " [Canceled]"
     #     prog = -1
-    progress_message = progress_message+ "\n "+ msg
+    if msg:
+        progress_message = progress_message+ "\n "+ msg
     if prog==0.1:
         progress_message=msg
+    if prog is not None:
+        d["progress"] = prog
     d = {"progress_msg": progress_message}
-    d["progress"] = prog
     if prog==1.0:
         d["status"]=True
     else:
         d["status"]=False
     try:
-        cron_logger.info("status::::::::::::::::::::->")
         cron_logger.info(str(d))
-        cron_logger.info("status::::::::::::::::::::->")
         update_task_status(doc_id, d)
         pass
     except Exception as e:
@@ -296,7 +294,6 @@ def main():
     r = collect()
     if len(r)==0:
         return
-    print("inside main")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
