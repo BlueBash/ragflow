@@ -9,11 +9,11 @@ import copy
 import re
 import sys
 import time
+import yaml
 import traceback
 import numpy as np
 import pandas as pd
 from functools import partial
-from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from api.settings import retrievaler
 from rag.settings import database_logger, SVR_QUEUE_NAME
@@ -31,7 +31,6 @@ from api.db.services.llm_service import LLMBundle
 from api.utils.file_utils import get_project_base_directory
 from rag.utils.redis_conn import REDIS_CONN
 
-load_dotenv()
 BATCH_SIZE = 64
 
 FACTORY = {
@@ -52,7 +51,8 @@ FACTORY = {
     ParserType.KG.value: knowledge_graph,
     ParserType.WEBSITE.value: website
 }
-
+with open("./conf/service_conf.yaml", "r") as file:
+    config = yaml.safe_load(file)
 
 CONSUMEER_NAME = "task_consumer_" + ("0" if len(sys.argv) < 2 else sys.argv[1])
 PAYLOAD = None
@@ -61,8 +61,8 @@ final_progress = 0
 
 
 def update_task_status(doc_id, data):
-    ams_base_url = os.getenv('AMS_ENDPOINT')
-    api_access_key = os.getenv('AUTHORIZATION_KEY')
+    ams_base_url = config['AMS']['AMS_ENDPOINT']
+    api_access_key = config['AMS']['AMS_AUTHORIZATION_KEY']
     url = f'{ams_base_url}/api/v1/coordinator/datasets/{doc_id}'
     headers = {
         'Content-Type': 'application/json',
