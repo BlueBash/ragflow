@@ -151,7 +151,11 @@ def get_binary_from_url(doc_id, url):
 
 
 def build(row):
-    chunker = FACTORY[row["parser_id"].lower()]
+    try:
+        chunker = FACTORY[row["parser_id"].lower()]
+    except Exception as e:
+        set_progress(row["doc_id"], prog=-1, msg=f"chunk type is invalis: {str(e)}")
+        return
     callback = partial(set_progress, row["doc_id"])
     try:
         st = timer()
@@ -309,7 +313,7 @@ def main():
         return
     # TODO: exception handler
     ## set_progress(r["did"], -1, "ERROR: ")
-    callback(0.7,msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
+    callback(0.7, msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
     try:
         embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
     except Exception as e:
