@@ -25,4 +25,5 @@ redis:
   host: 'localhost:6379'
 AMS:
   AMS_ENDPOINT: 'https://api-appstag.kickcall.ai/'
+  #AMS_ENDPOINT: 'https://api-app.kickcall.ai'
   AMS_AUTHORIZATION_KEY: 'b46adfec15fd5f8c758f81118e1d031486c5cc34aee394caa116e4b50580ee3eb3a925fd05da8dc2c2afe201cbd21908d5af7227f78d796c5bccc30e9e7c1f9b'
