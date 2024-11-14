@@ -80,7 +80,7 @@ def update_task_status(doc_id, data):
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
 
-def set_progress(doc_id, prog=None, msg="Processing..."):
+def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     global PAYLOAD
     global final_progress
     global progress_message
@@ -102,6 +102,7 @@ def set_progress(doc_id, prog=None, msg="Processing..."):
         d["status"]=True
     else:
         d["status"]=False
+    d["chunks_count"] = chunks_count
     try:
         cron_logger.info(str(d))
         update_task_status(doc_id, d)
@@ -352,7 +353,7 @@ def main():
         if use_raptor:
             callback(0.9, "Start Raptor")
         else:
-            callback(1., "Done!")
+            callback(1., "Done!", chunk_count)
         cron_logger.info(
             "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(r["doc_id"], tk_count, len(cks), timer() - st))
     import time
@@ -369,6 +370,7 @@ def main():
             cron_logger.error(str(e))
 
         init_kb(r)
+        chunk_count = len(set([c["_id"] for c in cks]))+chunk_count
         st = timer()
         es_r = ""
         es_bulk_size = 4
@@ -383,7 +385,7 @@ def main():
             ELASTICSEARCH.deleteByQuery(
                 Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
             cron_logger.error(str(es_r))
-        callback(1., "Done RAPTOR!")
+        callback(1., "Done RAPTOR!", chunk_count)
 
 
 def report_status():
