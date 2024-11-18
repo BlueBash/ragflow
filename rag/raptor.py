@@ -27,12 +27,12 @@ from rag.utils import num_tokens_from_string, truncate
 
 class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
     def __init__(self, max_cluster, llm_model, embd_model, prompt, max_token=256, threshold=0.1):
-        self._max_cluster = max_cluster
+        self._max_cluster = int(max_cluster)
         self._llm_model = llm_model
         self._embd_model = embd_model
-        self._threshold = threshold
+        self._threshold = float(threshold)
         self._prompt = prompt
-        self._max_token = max_token
+        self._max_token = int(max_token)
 
     def _get_optimal_clusters(self, embeddings: np.ndarray, random_state:int):
         max_clusters = min(self._max_cluster, len(embeddings))

@@ -87,10 +87,6 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     if prog is not None and prog < 0:
         cancel_job = True
         msg = "[ERROR]" + msg
-    # Task cancel code
-    # if cancel:
-    #     msg += " [Canceled]"
-    #     prog = -1
     if msg:
         progress_message = progress_message+ "\n "+ msg
     if prog==0.1:
@@ -273,7 +269,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
         row["parser_config"]["raptor"]["threshold"]
     )
     original_length = len(chunks)
-    raptor(chunks, row["parser_config"]["raptor"]["random_seed"], callback)
+    raptor(chunks, int(row["parser_config"]["raptor"]["random_seed"]), callback)
     doc = {
         "doc_id": row["doc_id"],
         "kb_id": [str(row["kb_id"])],
@@ -300,9 +296,9 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
 
 def main():
     r = collect()
-    cron_logger.info(f"PAYLOAD RECEIVED:- {r}")
     if len(r)==0:
         return
+    cron_logger.info(f"PAYLOAD RECEIVED:- {r}")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
