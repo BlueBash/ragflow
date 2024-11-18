@@ -387,6 +387,9 @@ def run_v2():
             doc_url = doc["url"]
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
 
+            if "parser_config" in doc and "chunk_token_num" in doc["parser_config"]:
+                doc["parser_config"]["chunk_token_num"] = int(doc["parser_config"]["chunk_token_num"])
+
             new_doc = req.copy()
             new_doc.pop("documents", None)
             new_doc["doc_id"] = doc_id
