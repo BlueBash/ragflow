@@ -79,19 +79,14 @@ def update_task_status(doc_id, data):
     except Exception as e:
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
-def cancel_job():
-    if PAYLOAD:
-        PAYLOAD.ack()
-        PAYLOAD = None
-    os._exit(0)
-
 def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     global PAYLOAD
     global final_progress
     global progress_message
+    cancel_job = False
     if prog is not None and prog < 0:
+        cancel_job = True
         msg = "[ERROR]" + msg
-        cancel_job()
     # Task cancel code
     # if cancel:
     #     msg += " [Canceled]"
@@ -112,15 +107,14 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     try:
         cron_logger.info(str(d))
         update_task_status(doc_id, d)
-        pass
     except Exception as e:
         cron_logger.error("set_progress:({}), {}".format(doc_id, str(e)))
 
-    # if cancel:
-    #     if PAYLOAD:
-    #         PAYLOAD.ack()
-    #         PAYLOAD = None
-    #     os._exit(0)
+    if cancel_job:
+        if PAYLOAD:
+            PAYLOAD.ack()
+            PAYLOAD = None
+        os._exit(0)
 
 def collect():
     global CONSUMEER_NAME, PAYLOAD
