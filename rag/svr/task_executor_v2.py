@@ -79,6 +79,11 @@ def update_task_status(doc_id, data):
     except Exception as e:
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
+def cancel_job():
+    if PAYLOAD:
+        PAYLOAD.ack()
+        PAYLOAD = None
+    os._exit(0)
 
 def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     global PAYLOAD
@@ -86,6 +91,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     global progress_message
     if prog is not None and prog < 0:
         msg = "[ERROR]" + msg
+        cancel_job()
     # Task cancel code
     # if cancel:
     #     msg += " [Canceled]"
@@ -300,6 +306,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
 
 def main():
     r = collect()
+    cron_logger.info(f"PAYLOAD RECEIVED:- {r}")
     if len(r)==0:
         return
     st = timer()
