@@ -269,7 +269,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
         row["parser_config"]["raptor"]["threshold"]
     )
     original_length = len(chunks)
-    raptor(chunks, int(row["parser_config"]["raptor"]["random_seed"]), callback)
+    raptor(chunks, row["parser_config"]["raptor"]["random_seed"], callback)
     doc = {
         "doc_id": row["doc_id"],
         "kb_id": [str(row["kb_id"])],
@@ -296,6 +296,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
 
 def main():
     r = collect()
+    
     if len(r)==0:
         return
     cron_logger.info(f"PAYLOAD RECEIVED:- {r}")

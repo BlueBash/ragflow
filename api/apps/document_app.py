@@ -387,8 +387,18 @@ def run_v2():
             doc_url = doc["url"]
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
 
-            if "parser_config" in doc and "chunk_token_num" in doc["parser_config"]:
-                doc["parser_config"]["chunk_token_num"] = int(doc["parser_config"]["chunk_token_num"])
+            if "parser_config" in doc:
+                parser_config = doc["parser_config"]
+                if "chunk_token_num" in parser_config:
+                    parser_config["chunk_token_num"] = int(parser_config["chunk_token_num"])
+                if "max_cluster" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["max_cluster"] = int(parser_config["raptor"]["max_cluster"])
+                if "max_token" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["max_token"] = int(parser_config["raptor"]["max_token"])
+                if "random_seed" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["random_seed"] = int(parser_config["raptor"]["random_seed"])
+                if "threshold" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["threshold"] = float(parser_config["raptor"]["threshold"])
 
             new_doc = req.copy()
             new_doc.pop("documents", None)
