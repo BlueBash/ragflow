@@ -80,26 +80,34 @@ def update_task_status(doc_id, data):
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
 def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
-    global PAYLOAD
-    global final_progress
-    global progress_message
+    global PAYLOAD, final_progress, progress_message
     cancel_job = False
     if prog is not None and prog < 0:
+        msg = "[ERROR] " + msg
         cancel_job = True
-        msg = "[ERROR]" + msg
+
     if msg:
         progress_message = progress_message+ "\n "+ msg
-    if prog==0.1:
+
+    if prog is not None and prog < 0:
+        status = "failed"
+    elif prog == 1.0:
+        status = "success"
+    else:
+        status = "Parsing"
+
+    if prog == 0.1:
         progress_message = msg
-    d = {"progress_msg": progress_message}
+        
     if prog is not None:
         final_progress = prog
-    d["progress"] = final_progress
-    if prog==1.0:
-        d["status"]=True
-    else:
-        d["status"]=False
-    d["chunks_count"] = chunks_count
+
+    d = {
+        "progress_msg": progress_message,
+        "progress": final_progress,
+        "status": status,
+        "chunks_count": chunks_count
+    }
     try:
         cron_logger.info(str(d))
         update_task_status(doc_id, d)
@@ -111,6 +119,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
             PAYLOAD.ack()
             PAYLOAD = None
         os._exit(0)
+
 
 def collect():
     global CONSUMEER_NAME, PAYLOAD
