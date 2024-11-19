@@ -10,6 +10,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+import csv
+import io
 import re
 from copy import deepcopy
 from io import BytesIO
@@ -303,7 +305,43 @@ def chunk(filename, binary=None, lang="Chinese", callback=None, **kwargs):
         for q, a in excel_parser(filename, binary, callback):
             res.append(beAdoc(deepcopy(doc), q, a, eng))
         return res
-    elif re.search(r"\.(txt|csv)$", filename, re.IGNORECASE):
+    
+    elif re.search(r"\.csv$", filename, re.IGNORECASE):
+        callback(0.1, "Start to parse.")
+        txt = ""
+        if binary:
+            encoding = find_codec(binary)
+            txt = binary.decode(encoding, errors="ignore")
+        else:
+            with open(filename, "r") as f:
+                while True:
+                    l = f.readline()
+                    if not l:
+                        break
+                    txt += l
+
+
+        csv_file = io.StringIO(txt)
+        reader = csv.reader(csv_file)
+        lines = list(reader)
+        fails = []
+        for i, arr in enumerate(lines):
+            if len(arr) != 2:
+                fails.append(str(i+1))
+            elif len(arr) == 2:
+                question, answer = arr
+                res.append(beAdoc(deepcopy(doc), question, answer, eng))
+
+            if len(res) % 999 == 0:
+                callback(
+                    len(res) * 0.6 / len(lines),
+                    "Extract Q&A: {}".format(len(res)) + (
+                        f"{len(fails)} failure, line: %s..." % (",".join(fails[:3])) if fails else ""
+                    )
+                )
+        return res
+    
+    elif re.search(r"\.txt$", filename, re.IGNORECASE):
         callback(0.1, "Start to parse.")
         txt = ""
         if binary:
@@ -414,9 +452,11 @@ def chunk(filename, binary=None, lang="Chinese", callback=None, **kwargs):
         "Excel, csv(txt), pdf, markdown and docx format files are supported.")
 
 
-if __name__ == "__main__":
-    import sys
-
-    def dummy(prog=None, msg=""):
-        pass
-    chunk(sys.argv[1], from_page=0, to_page=10, callback=dummy)
+# if __name__ == "__main__":
+#     name = "https://api-appstag.kickcall.ai/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MTgxLCJwdXIiOiJibG9iX2lkIn19--8b19a04f91bb091cea55c5686fffc94036dc522d/shipping_and_delivery.csv"
+#     binary = """b'Question,Answer\nGeneralized: How can I update or change my shipping information?,"Yes, you can change the shipping address by changing the address within your Practice Better profile. If you need to update your shipping address, ensure you do so before the next shipment is processed. If you need further assistance, customer service will be in touch with you."\nAre we able to change the shipping address?,"Yes, you can change the shipping address by changing the address within your Practice Better profile. If you need to update your shipping address, ensure you do so before the next shipment is processed. If you need further assistance, customer service will be in touch with you."\nCan someone please send shipping information once received? Thank you.,"Yes, shipping information will be sent to you via email from the pharmacy once it has been received and processed. Shipping takes about 7-10 business days. If you have not received any updates after 7 business days, our customer service team will provide assistance with checking on the order!"\nI just need to update the shipping address for my next shipment.,"You can change the shipping address by changing the address within your Practice Better profile. If you need to update your shipping address, ensure you do so before the next shipment is processed. If you need further assistance, customer service will be in touch with you."\nWhere do you ship to?,"We ship to all states within the United States, except Oregon and Pennsylvania, which are coming very soon"\nHello! I\xe2\x80\x99m from the Netherlands. Do you ship to Europe?,"Currently, we only ship within the United States and do not offer shipping to Europe."\nAm I able to choose which compounding pharmacy the compounded tirzepatide ships from? I am in Southern California.,"No, unfortunately, the compounding pharmacy used for shipping is determined based on your state and medication"\n'"""
+#     lang = "English"
+#     kb_id = 30
+#     parser_config = {'chunk_token_num': 128, 'delimiter': '\\n!?;。；！？', 'layout_recognize': True, 'raptor': {'use_raptor': True, 'max_cluster': 64, 'max_token': 256, 'prompt': 'Please summarize the following paragraphs. Be careful with the numbers, do not make things up. Paragraphs as following:\n      {cluster_content}\nThe above is the content you need to summarize.', 'random_seed': 1, 'threshold': 0.1}}
+#     tenant_id = "kickcall"
+#     chunk(name, binary, lang, kb_id, parser_config, callback=None, tenant_id=tenant_id)
