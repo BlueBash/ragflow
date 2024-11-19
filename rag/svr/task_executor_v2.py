@@ -94,7 +94,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
     elif prog == 1.0:
         status = "success"
     else:
-        status = "Parsing"
+        status = "parsing"
 
     if prog == 0.1:
         progress_message = msg
