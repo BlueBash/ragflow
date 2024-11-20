@@ -84,6 +84,7 @@ def scrape_data_by_urls(urls, chunk_size):
 
 def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, **kwargs):
     cron_logger.info("inside website chunk...")
+    callback(0.1, "Start to parse.")
 
     doc = {
         "docnm_kwd": filename,
@@ -94,7 +95,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     scraper = WebsiteScraper(base_url=filename, delay=2)
     scraper.crawl(max_pages=50)
     unique_urls = list(scraper.internal_links)
-    #unique_urls = scrape_all_url_from_base_url(filename)
+    callback(0.3, "Extract unique url Done.")
     cron_logger.info(f"len of unique url:- {len(unique_urls)}")
 
     if kwargs.get("parser_config", {}).get("chunk_token_num"):
@@ -102,6 +103,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     else:
         chunk_token_num = 128
     result = scrape_data_by_urls(unique_urls, chunk_token_num)
+    callback(0.5, "Data is scrapped scuuessfully from urls.")
 
     chunks = []
     for res in result:
