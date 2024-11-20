@@ -483,12 +483,9 @@ class Dealer:
     #         count += 1
     #     return res
     
-    def chunk_list_by_doc_id(self, tenant_id, kb_id, doc_id):
-        max_count = 10000
+    def chunk_list_by_doc_id(self, tenant_id, doc_id, start, end):
         s = Search(using=self.es, index=index_name(tenant_id))
-
-        s = s.query(Q("terms", kb_id=[kb_id]))[0:max_count]
-        s = s.query(Q("match", doc_id=doc_id))[0:max_count].sort({"create_timestamp_flt": {"order": "desc"}})
+        s = s.query(Q("match", doc_id=doc_id))[start:end].sort({"create_timestamp_flt": {"order": "desc"}})
         s = s.to_dict()
         
         es_res = self.es.search(s, timeout="600s", src=True)

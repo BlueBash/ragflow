@@ -368,18 +368,17 @@ def rm():
 
 
 @manager.route('/chunk_v2', methods=['POST'])
-@validate_request("tenant_id", "kb_id", "doc_id")
+@validate_request("tenant_id", "doc_id")
 def get_chunk_by_doc_id():
     req = request.json
     tenant_id = req["tenant_id"]
-    kb_id = req["kb_id"]
     doc_id = req["doc_id"]
     page = req.get("page", 1)
     page_size = req.get("page_size", 10)
     try:
         start = (page - 1) * page_size
         end = start + page_size
-        data = retrievaler.chunk_list_by_doc_id(tenant_id, kb_id, doc_id)[start:end]
+        data = retrievaler.chunk_list_by_doc_id(tenant_id, doc_id, start, end)
         return get_json_result(data=data)
     except Exception as e:
         return server_error_response(e)
