@@ -40,7 +40,7 @@ from api.db.services.llm_service import LLMBundle
 
 @manager.route('/list_v2', methods=['POST'])
 @validate_request("doc_id")
-def list_chunk1():
+def list_chunk_v2():
     req = request.json
     doc_id = req["doc_id"]
     page = int(req.get("page", 1))
