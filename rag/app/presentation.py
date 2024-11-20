@@ -93,6 +93,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
     Every page will be treated as a chunk. And the thumbnail of every page will be stored.
     PPT file will be parsed by using this method automatically, setting-up for every PPT file is not necessary.
     """
+    callback(-1, "Currently presentation is not working...")
     eng = lang.lower() == "english"
     doc = {
         "docnm_kwd": filename,

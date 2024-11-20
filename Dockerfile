@@ -8,13 +8,6 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
-RUN --mount=type=bind,source=libssl1.1_1.1.1f-1ubuntu2_amd64.deb,target=/root/libssl1.1_1.1.1f-1ubuntu2_amd64.deb \
-    if [ "${ARCH}" = "amd64" ]; then \
-        dpkg -i /root/libssl1.1_1.1.1f-1ubuntu2_amd64.deb; \
-    fi
-
-ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
-
 ENV POETRY_HOME="/root/.local"
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
