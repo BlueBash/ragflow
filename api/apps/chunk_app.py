@@ -65,6 +65,7 @@ def list_chunk_v2():
                     "content_with_weight", ""),
                 "doc_id": sres.field[id]["doc_id"],
                 "docnm_kwd": sres.field[id]["docnm_kwd"],
+                "create_time": sres.field[id]["create_time"],
                 "important_kwd": sres.field[id].get("important_kwd", []),
                 "img_id": sres.field[id].get("img_id", ""),
                 "available_int": sres.field[id].get("available_int", 1),
