@@ -77,7 +77,7 @@ def scrape_data_by_urls(urls, chunk_size):
     docs = loader.load()
     html2text = Html2TextTransformer()
     docs_transformed = html2text.transform_documents(docs)
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=chunk_size, chunk_overlap=0)
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=chunk_size, chunk_overlap=20)
     splits = splitter.split_documents(docs_transformed)
     return splits
 

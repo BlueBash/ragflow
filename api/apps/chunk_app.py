@@ -43,10 +43,10 @@ from api.db.services.llm_service import LLMBundle
 def list_chunk_v2():
     req = request.json
     doc_id = req["doc_id"]
-    page = int(req.get("page", 1))
-    size = int(req.get("size", 30))
-    question = req.get("keywords", "")
     tenant_id = req.get("tenant_id")
+    page = int(req.get("page", 1))
+    size = int(req.get("page_size", 30))
+    question = req.get("keywords", "")
     if not tenant_id:
         return get_data_error_result(retmsg="Tenant not found!")
     try:
@@ -65,7 +65,7 @@ def list_chunk_v2():
                     "content_with_weight", ""),
                 "doc_id": sres.field[id]["doc_id"],
                 "docnm_kwd": sres.field[id]["docnm_kwd"],
-                "create_time": sres.field[id]["create_time"],
+                "create_time": sres.field[id].get("create_time",""),
                 "important_kwd": sres.field[id].get("important_kwd", []),
                 "img_id": sres.field[id].get("img_id", ""),
                 "available_int": sres.field[id].get("available_int", 1),
