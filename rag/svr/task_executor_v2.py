@@ -18,14 +18,13 @@ from concurrent.futures import ThreadPoolExecutor
 from api.settings import retrievaler
 from rag.settings import database_logger, SVR_QUEUE_NAME
 from rag.settings import cron_logger, DOC_MAXIMUM_SIZE
-from multiprocessing import Pool
 from elasticsearch_dsl import Q, Search
 from rag.utils.es_conn import ELASTICSEARCH
 from timeit import default_timer as timer
 from rag.utils import rmSpace, findMaxTm, num_tokens_from_string
 from rag.nlp import search, rag_tokenizer
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
-from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website
+from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v2
 from api.db import LLMType, ParserType
 from api.db.services.llm_service import LLMBundle
 from api.utils.file_utils import get_project_base_directory
@@ -49,7 +48,7 @@ FACTORY = {
     ParserType.AUDIO.value: audio,
     ParserType.EMAIL.value: email,
     ParserType.KG.value: knowledge_graph,
-    ParserType.WEBSITE.value: website
+    ParserType.WEBSITE.value: website_v2
 }
 with open("./conf/service_conf.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -138,7 +137,6 @@ def collect():
     if not msg:
         return pd.DataFrame()
 
-    #Task cancel code write here
     tasks = msg
     if not tasks:
         cron_logger.warning("{} empty task!".format(msg["id"]))
@@ -191,8 +189,12 @@ def build(row):
         return []
 
     try:
-        cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
-                            kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])
+        if row["parser_id"].lower()=="website":
+            print("inside website..................................")
+            cks = website_v2.chunk(row["name"], row["llm_factory"], row["llm_id"], row["llm_api_key"], callback=callback)
+        else:
+            cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
+                                kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])
         
         cron_logger.info("Chunking({}) /{}".format(timer() - st, row["name"]))
     except Exception as e:
