@@ -78,7 +78,7 @@ def update_task_status(doc_id, data):
     except Exception as e:
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
-def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=None):
+def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     global PAYLOAD, final_progress, progress_message
     cancel_job = False
     if prog is not None and prog < 0:
@@ -190,8 +190,7 @@ def build(row):
 
     try:
         if row["parser_id"].lower()=="website":
-            print("inside website..................................")
-            cks = website_v2.chunk(row["name"], row["llm_factory"], row["llm_id"], row["llm_api_key"], callback=callback)
+            cks = website_v2.chunk(row["name"], row["llm_factory"], row["llm_id"], row["llm_api_key"], parser_config=row["parser_config"], callback=callback)
         else:
             cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
                                 kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])

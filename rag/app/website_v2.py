@@ -73,7 +73,7 @@ def generate_answer_gpt(content, llm_factory, llm_id, llm_api_key):
         cron_logger.info(f"LLm Factory not found... {llm_factory}")
 
 
-def scrape_data_by_urls(url, llm_factory, llm_id, llm_api_key):
+def scrape_data_by_urls(urls, llm_factory, llm_id, llm_api_key):
     def chunk_text(text, max_tokens=10000):
         tokenizer = encoding_for_model('gpt-3.5-turbo')
         words = text.split()
@@ -92,10 +92,15 @@ def scrape_data_by_urls(url, llm_factory, llm_id, llm_api_key):
     def extract_and_split_by_html(urls):
         loader = AsyncHtmlLoader(web_path=urls)
         docs = loader.load()
-        soup = BeautifulSoup(docs[0].page_content, 'html.parser')
-        body_element = soup.find("body")
-        cron_logger.info("body_element Extraction Done.")
-        return chunk_text(str(body_element))
+        final_docs = []
+        for i in range(len(docs)):
+            soup = BeautifulSoup(docs[i].page_content, 'html.parser')
+            body_element = soup.find("body")
+            chunks = chunk_text(str(body_element))
+            final_docs.extend(chunks)
+            cron_logger.info(f"Split html of {i} frame:- {len(chunks)}")
+        return final_docs
+    
     
     def generate_answer_gpt_list(html_body_list, llm_factory, llm_id, llm_api_key):
         cron_logger.info(f"Lenght of html_body_list {len(html_body_list)}")
@@ -108,8 +113,8 @@ def scrape_data_by_urls(url, llm_factory, llm_id, llm_api_key):
         return result
 
     
-    html_body_list = extract_and_split_by_html(url)
-    cron_logger.info("html_body_list Done..")
+    html_body_list = extract_and_split_by_html(urls)
+    cron_logger.info("html_body_list Done.")
     result = generate_answer_gpt_list(html_body_list, llm_factory, llm_id, llm_api_key)
     cron_logger.info("Gnerate GPT answer Done.")
     return result
@@ -173,7 +178,7 @@ class WebsiteScraper:
             new_links = [link for link in self.internal_links if link not in self.visited_links]
             to_visit.extend(new_links)
 
-def chunk(filename, llm_factory, llm_id, llm_api_key, callback=None):
+def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=None):
     cron_logger.info("inside website chunk...")
     callback(0.1, "Start to parse.")
 
@@ -183,11 +188,26 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, callback=None):
     }
    
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
-    unique_urls = filename
-    callback(0.3, "Extract unique url Done.")
-    cron_logger.info(f"len of unique url:- {len(unique_urls)}")
-
-    chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key)
+    scrap_website = parser_config.get("scrap_website", "false")
+    unique_urls=[]
+    if scrap_website:
+        callback(0.25, "Start scrapping full website.")
+        scraper = WebsiteScraper(base_url=filename, delay=2)
+        scraper.crawl(max_pages=5)
+        urls = list(scraper.internal_links)
+        cron_logger.info(f"len of total url:- {len(urls)}")
+        processed_urls = {
+            url.rstrip('/').removesuffix('/#content') if url.endswith('/#content') else url.rstrip('/')
+            for url in urls
+        }
+        unique_urls = list(set(processed_urls))
+        callback(0.3, "Extract unique url Done.")
+        cron_logger.info(f"len of unique url:- {len(unique_urls)}")
+        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key)
+    else:
+        callback(0.25, "Start scrapping web page Only.")
+        unique_urls = filename
+        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key)
     callback(0.5, "Data is scrapped scuuessfully from urls.")
     eng ="english"
 
