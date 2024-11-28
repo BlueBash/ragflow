@@ -1,29 +1,17 @@
-import io
-import requests
-import datetime
-import json
-import logging
-import os
-import hashlib
-import copy
-import re
-import sys
-import time
-import yaml
-import traceback
 import numpy as np
 import pandas as pd
 from functools import partial
+from elasticsearch_dsl import Q
 from concurrent.futures import ThreadPoolExecutor
 from api.settings import retrievaler
-from rag.settings import database_logger, SVR_QUEUE_NAME
-from rag.settings import cron_logger, DOC_MAXIMUM_SIZE
-from elasticsearch_dsl import Q, Search
 from rag.utils.es_conn import ELASTICSEARCH
 from timeit import default_timer as timer
-from rag.utils import rmSpace, findMaxTm, num_tokens_from_string
 from rag.nlp import search, rag_tokenizer
+from rag.settings import database_logger, SVR_QUEUE_NAME
+from rag.settings import cron_logger, DOC_MAXIMUM_SIZE
+from rag.utils import rmSpace, findMaxTm, num_tokens_from_string
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
+import io, requests, datetime, json, logging, os, hashlib, copy, re, sys, time, yaml, traceback
 from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v2
 from api.db import LLMType, ParserType
 from api.db.services.llm_service import LLMBundle
@@ -58,6 +46,25 @@ PAYLOAD = None
 progress_message=""
 final_progress = 0
 
+def get_task_status(doc_id):
+    ams_base_url = config['AMS']['AMS_ENDPOINT']
+    api_access_key = config['AMS']['AMS_AUTHORIZATION_KEY']
+    url = f'{ams_base_url}/api/v1/coordinator/datasets/{doc_id}'
+    headers = {
+        'Content-Type': 'application/json',
+        'Api-Access-Key': api_access_key
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            cron_logger.info(f"get_task_status: {response.json()}")
+            return response.json()
+        else:
+            cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
+
+    except Exception as e:
+        cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
 
 def update_task_status(doc_id, data):
     ams_base_url = config['AMS']['AMS_ENDPOINT']
@@ -83,6 +90,11 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     cancel_job = False
     if prog is not None and prog < 0:
         msg = "[ERROR] " + msg
+        
+    
+    result = get_task_status(doc_id)
+    if result.get("progress")==-1:
+        cron_logger.info(f"Cancel Job with doc_id:- {doc_id} reason canceld by manually.")
         cancel_job = True
 
     if msg:

@@ -20,7 +20,7 @@ import traceback
 from flask import request
 from flask_login import login_required, current_user
 from elasticsearch_dsl import Q
-
+from rag.settings import cron_logger
 from rag.app.qa import rmPrefix, beAdoc
 from rag.nlp import search, rag_tokenizer, keyword_extraction
 from rag.utils.es_conn import ELASTICSEARCH
@@ -410,6 +410,7 @@ def create():
 @validate_request("tenant_id", "kb_ids", "question")
 def retrieval_test1():
     req = request.json
+    cron_logger.info(f"retrieval_test_v2 payload :- {req}")
     page = int(req.get("page", 1))
     size = int(req.get("size", 30))
     question = req["question"]
