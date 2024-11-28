@@ -58,7 +58,6 @@ def get_task_status(doc_id):
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            cron_logger.info(f"get_task_status: {response.json()}")
             return response.json()
         else:
             cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
@@ -91,11 +90,13 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     if prog is not None and prog < 0:
         msg = "[ERROR] " + msg
         
-    
     result = get_task_status(doc_id)
+    cron_logger.info(f"get_task_status-> progress: {result.get("progress")}")
     if result.get("progress")==-1:
-        cron_logger.info(f"Cancel Job with doc_id:- {doc_id} reason canceld by manually.")
+        msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
+        cron_logger.info(msg)
         cancel_job = True
+        prog = -1
 
     if msg:
         progress_message = progress_message+ "\n "+ msg
@@ -120,7 +121,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
         "chunks_count": chunks_count
     }
     try:
-        cron_logger.info(str(d))
+        cron_logger.info(f"set_progress:- {str(d)}")
         update_task_status(doc_id, d)
     except Exception as e:
         cron_logger.error("set_progress:({}), {}".format(doc_id, str(e)))
