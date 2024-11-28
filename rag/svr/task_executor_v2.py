@@ -91,7 +91,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
         msg = "[ERROR] " + msg
         
     result = get_task_status(doc_id)
-    cron_logger.info(f"get_task_status-> progress: {result.get("progress")}")
+    cron_logger.info(f"get_task_status-> progress: {result.get('progress')}")
     if result.get("progress")==-1:
         msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
         cron_logger.info(msg)
