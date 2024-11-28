@@ -204,11 +204,11 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
         unique_urls = list(set(processed_urls))
         callback(0.3, "Extract unique url Done.")
         cron_logger.info(f"len of unique url:- {len(unique_urls)}")
-        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=None)
+        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=callback)
     else:
         callback(0.25, "Start scrapping web page Only.")
         unique_urls = filename
-        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=None)
+        chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=callback)
     callback(0.5, "Data is scrapped scuuessfully from urls.")
     eng ="english"
 
