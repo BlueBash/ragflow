@@ -86,7 +86,8 @@ def scrape_data_by_urls(urls, llm_factory, llm_id, llm_api_key, callback=None):
                 chunks.append(" ".join(current_chunk))
                 current_chunk = []
         if current_chunk:
-            chunks[-1]+" ".join(current_chunk)
+            if len(chunks)>0:
+                chunks[-1]+" ".join(current_chunk)
         return chunks
 
     def extract_and_split_by_html(urls):
@@ -190,6 +191,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
    
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     scrap_website = parser_config.get("scrap_website", "false")
+    exclude_urls = parser_config.get("exclude_urls", [])
     unique_urls=[]
     if scrap_website:
         callback(0.25, "Start scrapping full website.")
@@ -197,11 +199,16 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
         scraper.crawl(max_pages=3)
         urls = list(scraper.internal_links)
         cron_logger.info(f"len of total url:- {len(urls)}")
+        cron_logger.info(f"[website][chunks]: URLS scrape before exclude:- {urls}")
         processed_urls = {
             url.rstrip('/').removesuffix('/#content') if url.endswith('/#content') else url.rstrip('/')
             for url in urls
         }
         unique_urls = list(set(processed_urls))
+        unique_urls = [
+            url for url in unique_urls if not any(pattern in url for pattern in exclude_urls)
+        ]
+        cron_logger.info(f"[website][chunks]: URLS scrappscrapeing after exclude {unique_urls}")
         callback(0.3, "Extract unique url Done.")
         cron_logger.info(f"len of unique url:- {len(unique_urls)}")
         chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=callback)
@@ -209,7 +216,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
         callback(0.25, "Start scrapping web page Only.")
         unique_urls = filename
         chunks = scrape_data_by_urls(unique_urls, llm_factory, llm_id, llm_api_key, callback=callback)
-    callback(0.5, "Data is scrapped scuuessfully from urls.")
+    callback(0.5, "Data is scrapped successfully from urls.")
     eng ="english"
 
     res = tokenize_chunks(chunks, doc, eng)

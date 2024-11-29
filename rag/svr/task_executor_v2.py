@@ -61,6 +61,8 @@ def get_task_status(doc_id):
             return response.json()
         else:
             cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
+            response = {"progress": 0}
+            return response
 
     except Exception as e:
         cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
@@ -91,7 +93,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
         msg = "[ERROR] " + msg
         
     result = get_task_status(doc_id)
-    progress = result.get("progress", "Not found..")
+    progress = result.get("progress", -1)
     cron_logger.info(f"get_task_status-> progress: {progress}")
     if result.get("progress")==-1:
         msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
@@ -332,7 +334,7 @@ def main():
     if cks is None:
         return
     if not cks:
-        print("No chunk! Done!")
+        callback(-1, msg="No Chnuks to embed.")
         return
     # TODO: exception handler
     ## set_progress(r["did"], -1, "ERROR: ")
