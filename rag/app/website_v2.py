@@ -180,6 +180,29 @@ class WebsiteScraper:
             new_links = [link for link in self.internal_links if link not in self.visited_links]
             to_visit.extend(new_links)
 
+
+def exclude_pattern_from_urls(urls, exclude_patterns):
+    filtered_urls = []
+    
+    for url in urls:
+        should_exclude = False
+        for pattern in exclude_patterns:
+            if not pattern.strip():
+                continue
+            if pattern.endswith("/*"):
+                if pattern[:-2] in url:
+                    should_exclude = True
+                    break
+            elif url.endswith(pattern):
+                should_exclude = True
+                break
+        
+        if not should_exclude:
+            filtered_urls.append(url)
+    
+    return filtered_urls
+
+
 def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=None):
     cron_logger.info("inside website chunk...")
     callback(0.1, "Start to parse.")
@@ -191,7 +214,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
    
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     scrap_website = parser_config.get("scrap_website", "false")
-    exclude_urls = parser_config.get("exclude_urls", [])
+    exclude_patterns = parser_config.get("exclude_urls", [])
     unique_urls=[]
     if scrap_website:
         callback(0.25, "Start scrapping full website.")
@@ -205,9 +228,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
             for url in urls
         }
         unique_urls = list(set(processed_urls))
-        unique_urls = [
-            url for url in unique_urls if not any(pattern in url for pattern in exclude_urls)
-        ]
+        unique_urls = exclude_pattern_from_urls(unique_urls, exclude_patterns)
         cron_logger.info(f"[website][chunks]: URLS scrappscrapeing after exclude {unique_urls}")
         callback(0.3, "Extract unique url Done.")
         cron_logger.info(f"len of unique url:- {len(unique_urls)}")
