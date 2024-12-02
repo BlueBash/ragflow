@@ -91,6 +91,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     cancel_job = False
     if prog is not None and prog < 0:
         msg = "[ERROR] " + msg
+        cancel_job = True
         
     result = get_task_status(doc_id)
     progress = result.get("progress", -1)

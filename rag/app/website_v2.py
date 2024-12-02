@@ -12,6 +12,7 @@ from rag.settings import cron_logger
 import google.generativeai as genai
 from urllib.parse import urljoin, urlparse
 from tiktoken import encoding_for_model
+from api.utils.web_utils import is_valid_url
 from langchain_community.document_loaders import AsyncHtmlLoader
 
 class ListChunking(BaseModel):
@@ -206,6 +207,8 @@ def exclude_pattern_from_urls(urls, exclude_patterns):
 def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=None):
     cron_logger.info("inside website chunk...")
     callback(0.1, "Start to parse.")
+    if not is_valid_url(filename):
+        callback(-1, "The URL format is invalid")
 
     doc = {
         "docnm_kwd": filename,
@@ -219,7 +222,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
     if scrap_website:
         callback(0.25, "Start scrapping full website.")
         scraper = WebsiteScraper(base_url=filename, delay=2)
-        scraper.crawl(max_pages=3)
+        scraper.crawl(max_pages=4)
         urls = list(scraper.internal_links)
         cron_logger.info(f"len of total url:- {len(urls)}")
         cron_logger.info(f"[website][chunks]: URLS scrape before exclude:- {urls}")
