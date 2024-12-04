@@ -231,7 +231,10 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
                     docs.append(d)
             cks = docs
             try:
-                tk_count = embedding(cks, embd_mdl)
+                if len(cks)>0:
+                    tk_count = embedding(cks, embd_mdl)
+                else:
+                    continue
             except Exception as e:
                 callback(prog=prog, msg="Embedding error:{}".format(str(e)))
                 cron_logger.error(str(e))
