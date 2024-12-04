@@ -721,7 +721,7 @@ def generate_prompt_gpt_only(final_content):
 class ListBusinessGPT(BaseModel):
     companyName: str
     email: str
-    address: list[str]
+    address: str
     phoneNumbers: list[str]
     workingHours: list[str]
 

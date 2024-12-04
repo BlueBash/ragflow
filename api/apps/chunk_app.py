@@ -163,18 +163,18 @@ def get_business_info():
     cron_logger.info(f"[chunks_app][business-info] payload :- {req}")
     url = req.get("url")
 
-
     try:
         if not is_valid_url(url):
             raise Exception("The URL format is invalid")
         response_data = {}
         response = business_info_by_gpt_only(url, req["llm_factory"], req["llm_id"], req["llm_api_key"])
         gpt_key_list = ["companyName", "email", "address", "phoneNumbers", "workingHours"]
-        for key in gpt_key_list:
-            response_data[key] = getattr(response, key)
-        print(response_data)
-                
-        
+        if isinstance(response, dict):
+            for key in gpt_key_list:
+                response_data[key] = response.get(key)
+        else:
+            for key in gpt_key_list:
+                response_data[key] = getattr(response, key)
      
         return get_json_result(data=response_data)
     except Exception as e:
