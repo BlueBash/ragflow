@@ -590,3 +590,281 @@ Answer format: (in language of user's question)
     kwd = chat_mdl.chat(prompt, [{"role": "user",  "content": content}], {"temperature": 0.2})
     if isinstance(kwd, tuple): return kwd[0]
     return kwd
+
+
+import json
+from openai import OpenAI
+from pydantic import BaseModel
+from bs4 import BeautifulSoup
+import google.generativeai as genai
+from rag.settings import cron_logger
+from langchain_community.document_loaders import AsyncHtmlLoader
+
+
+def generate_prompt(html_body, question):
+    prompt = f"""
+    You are an intelligent assistant that extracts specific information from a provided html text.
+    Analyze the text and answer the question accurately based on the given information.
+    If the answer cannot be found in the chunk, respond with "Not Found"
+    response answer in minimum words as possible return only answer in maximum 5 words.
+
+        ### html body:
+        {html_body}
+
+        ### Question:
+        {question}
+
+        ### Answer:
+
+    """
+    return prompt.strip()
+
+def generate_answer_gpt(content, llm_factory, llm_id, llm_api_key):
+    if llm_factory == "Gemini":
+        genai.configure(api_key=llm_api_key)
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        response = model.generate_content(content)
+        return response.text
+    elif llm_factory == "OpenAI":
+        client = OpenAI(api_key=llm_api_key)
+        completion = client.chat.completions.create(
+            model = llm_id,
+            messages=[
+                {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
+                {"role": "user", "content": content}
+            ]
+        )
+        return completion.choices[0].message
+    else:
+        cron_logger.info(f"LLm Factory not found... {llm_factory}")
+
+
+class ListBusiness(BaseModel):
+    email: str
+    address: str
+    contact_number: str
+    working_hours: str
+
+def generate_answer_gpt_list(content, llm_factory, llm_id, llm_api_key):
+    if llm_factory == "Gemini":
+        genai.configure(api_key=llm_api_key)
+        model = genai.GenerativeModel(llm_id)
+        result = model.generate_content(
+            content,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json", response_schema=ListBusiness
+            ),
+        )
+        if "content" not in result.candidates[0]:
+            return []
+        return json.loads(result.candidates[0].content.parts[0].text)
+    elif llm_factory == "OpenAI":
+        client = OpenAI(api_key=llm_api_key)
+        completion = client.beta.chat.completions.parse(
+            model = llm_id,
+            messages=[
+                {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            response_format=ListBusiness
+        )
+        return completion.choices[0].message.parsed
+    else:
+        cron_logger.info(f"LLm Factory not found... {llm_factory}")
+
+def extract_html_body(urls):
+    loader = AsyncHtmlLoader(web_path=urls)
+    docs = loader.load()
+    soup = BeautifulSoup(docs[0].page_content, 'html.parser')
+    body_element = str(soup.find("body"))
+    return body_element
+
+
+def business_info(url, question, llm_factory, llm_id, llm_api_key):
+    html_body = extract_html_body(url)
+    cron_logger.info("generate html body done.")
+    answer = generate_answer_gpt(generate_prompt(html_body, question), llm_factory, llm_id, llm_api_key)
+    cron_logger.info(f"answer by model: {answer.strip()}")
+    return answer.strip()
+
+
+def business_info_by_gpt(url, question, llm_factory, llm_id, llm_api_key):
+    html_body = extract_html_body(url)
+    cron_logger.info("generate html body done.")
+    answer = generate_answer_gpt_list(generate_prompt(html_body, question), llm_factory, llm_id, llm_api_key)
+    cron_logger.info(f"answer by model: {answer}")
+    return answer
+
+
+
+#GPT ONLY
+
+import re
+import time
+import requests
+from urllib.parse import urljoin, urlparse
+
+def generate_prompt_gpt_only(final_content):
+    prompt = f"""
+    You are an intelligent assistant that extracts specific information from a provided html text.
+    Analyze the text and answer the question accurately based on the given information.
+    Response answer in minimum words as possible.
+
+    This is the page of website:
+
+    Below is the HTML:
+    {final_content}
+    Above is the HTML.
+
+    """
+    return prompt.strip()
+
+
+class ListBusinessGPT(BaseModel):
+    companyName: str
+    email: str
+    address: str
+    phoneNumbers: list[str]
+    workingHours: list[str]
+
+def generate_answer_gpt_list_only(content, llm_factory, llm_id, llm_api_key):
+    if llm_factory == "Gemini":
+        genai.configure(api_key=llm_api_key)
+        model = genai.GenerativeModel(llm_id)
+        result = model.generate_content(
+            content,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json", response_schema=ListBusinessGPT
+            ),
+        )
+        if "content" not in result.candidates[0]:
+            return []
+        return json.loads(result.candidates[0].content.parts[0].text)
+    elif llm_factory == "OpenAI":
+        client = OpenAI(api_key=llm_api_key)
+        completion = client.beta.chat.completions.parse(
+            model = llm_id,
+            messages=[
+                {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            response_format=ListBusinessGPT
+        )
+        return completion.choices[0].message.parsed
+    else:
+        cron_logger.info(f"LLm Factory not found... {llm_factory}")
+
+def extract_html(urls):
+    loader = AsyncHtmlLoader(web_path=urls)
+    docs = loader.load()
+    final_content = ""
+    for i in range(len(docs)):
+        soup = BeautifulSoup(docs[0].page_content, 'html.parser')
+        final_content = final_content + str(soup)
+        cron_logger.info(f"working on {i} frame.")
+    return final_content
+
+
+
+class WebsiteScraper:
+    def __init__(self, base_url, delay=1, user_agent=None):
+        self.base_url = base_url
+        self.delay = delay
+        self.user_agent = user_agent or 'EthicalScraper/1.0'
+        self.session = requests.Session()
+        self.session.headers.update({'User-Agent': self.user_agent})
+        self.internal_links = set()
+        self.visited_links = set()
+
+    def is_internal_link(self, url):
+        return urlparse(url).netloc == urlparse(self.base_url).netloc
+
+    def get_robots_txt(self):
+        robots_url = urljoin(self.base_url, '/robots.txt')
+        response = self.session.get(robots_url)
+        if response.status_code == 200:
+            cron_logger.info("Robots.txt found. Please review it manually to ensure compliance.")
+        else:
+            cron_logger.info("No robots.txt found. Proceed with caution.")
+
+    def scrape_page(self, url):
+        if url in self.visited_links:
+            return
+
+        cron_logger.info(f"Scraping: {url}")
+        self.visited_links.add(url)
+
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            cron_logger.error(f"Error fetching {url}: {e}")
+            return
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag.attrs['href']
+            full_url = urljoin(url, href)
+            if self.is_internal_link(full_url):
+                self.internal_links.add(full_url)
+
+        time.sleep(self.delay + random.uniform(0, 1))
+
+    def crawl(self, max_pages=10):
+        self.get_robots_txt()
+        pages_crawled = 0
+        to_visit = [self.base_url]
+
+        while to_visit and pages_crawled < max_pages:
+            url = to_visit.pop(0)
+            self.scrape_page(url)
+            pages_crawled += 1
+
+            new_links = [link for link in self.internal_links if link not in self.visited_links]
+            to_visit.extend(new_links)
+
+def exclude_pattern_from_urls(urls, include_pattern):
+    include_urls = []
+    regex_patterns = [re.compile(pattern) for pattern in include_pattern]
+    
+    for url in urls:
+        should_exclude = False
+        for pattern in regex_patterns:
+            if pattern.search(url):
+                should_exclude = True
+                break
+        
+        if should_exclude:
+            include_urls.append(url)
+    
+    return include_urls
+
+
+def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
+    include_pattern = ["contact", "about"]
+    scraper = WebsiteScraper(base_url=url, delay=2)
+    scraper.crawl(max_pages=10)
+    urls = list(scraper.internal_links)
+    cron_logger.info(f"len of total url:- {len(urls)}")
+    cron_logger.info(f"[business_info_by_gpt_only]: URLS scrape before exclude:- {urls}")
+    processed_urls = {
+        url.rstrip('/').removesuffix('/#content') if url.endswith('/#content') else url.rstrip('/')
+        for url in urls
+    }
+    unique_urls = list(set(processed_urls))
+    include_urls = exclude_pattern_from_urls(unique_urls, include_pattern)
+    include_urls.append(url)
+    cron_logger.info(f"[business_info_by_gpt_only]: URLS scrappscrapeing after exclude: unique_urls: {unique_urls}")
+    cron_logger.info(f"[business_info_by_gpt_only]: URLS scrappscrapeing after exclude: include_urls: {include_urls}")
+    final_content = extract_html(include_urls)
+    cron_logger.info("generate html body done.")
+    answer = generate_answer_gpt_list_only(generate_prompt_gpt_only(final_content), llm_factory, llm_id, llm_api_key)
+    cron_logger.info(f"answer by model: {answer}")
+    return answer

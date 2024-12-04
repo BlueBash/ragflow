@@ -326,7 +326,7 @@ def main():
     
     if len(r)==0:
         return
-    cron_logger.info(f"PAYLOAD RECEIVED:- {r}")
+    cron_logger.info(f"[task_executor_v2] PAYLOAD RECEIVED:- {r}")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")

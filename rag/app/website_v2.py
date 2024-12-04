@@ -89,6 +89,9 @@ def scrape_data_by_urls(urls, llm_factory, llm_id, llm_api_key, callback=None):
         if current_chunk:
             if len(chunks)>0:
                 chunks[-1]+" ".join(current_chunk)
+            else:
+                chunks.append(current_chunk)
+
         return chunks
 
     def extract_and_split_by_html(urls):
@@ -222,7 +225,7 @@ def chunk(filename, llm_factory, llm_id, llm_api_key, parser_config, callback=No
     if scrap_website:
         callback(0.25, "Start scrapping full website.")
         scraper = WebsiteScraper(base_url=filename, delay=2)
-        scraper.crawl(max_pages=4)
+        scraper.crawl(max_pages=3)
         urls = list(scraper.internal_links)
         cron_logger.info(f"len of total url:- {len(urls)}")
         cron_logger.info(f"[website][chunks]: URLS scrape before exclude:- {urls}")
