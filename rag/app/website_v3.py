@@ -77,6 +77,7 @@ class WebsiteScraper:
 
 def generate_prompt_for_chunks():
     prompt = f"""
+    You are a highly skilled content analyst specializing in Retrieval-Augmented Generation (RAG) systems.
     You are tasked with processing a single section of a webpage and generating multiple meaningful chunks of content for that section. 
     Break the provided section into **multiple chunks**, each representing a self-contained, coherent unit of information. 
     Focus on **what the end user sees** and **how it impacts or informs them**, without referring to the underlying HTML structure or characteristics.
@@ -113,21 +114,39 @@ class PageSections(BaseModel):
 
 def generate_page_content_gpt(content, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=True):
     conversation_history.append({"role": "user", "content": content})
-    client = OpenAI(api_key=llm_api_key)
     if is_chunking:
         response_format = ChunkList
     else:
         response_format = PageSections
-    
-    response = client.beta.chat.completions.parse(
-        model=llm_id,
-        messages=conversation_history,
-        response_format=response_format
-    )
-    
-    ans = response.choices[0].message.parsed
-    conversation_history.append({"role": "assistant", "content": response.choices[0].message.content})
-    return ans, response.usage.total_tokens, conversation_history
+    if llm_factory == "Gemini":
+        genai.configure(api_key=llm_api_key)
+        model = genai.GenerativeModel(llm_id)
+        response = model.generate_content(
+            contents = str(conversation_history),
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json", response_schema=response_format
+            ),
+        )
+        if "content" not in response.candidates[0]:
+            return json.loads({}), 0, conversation_history
+        ans = json.loads(response.candidates[0].content.parts[0].text)
+        conversation_history.append({"role": "assistant", "content": response.candidates[0].content.parts[0].text})
+        return ans, response.usage_metadata.total_token_count, conversation_history
+
+    elif llm_factory == "OpenAI":
+        client = OpenAI(api_key=llm_api_key)
+        response = client.beta.chat.completions.parse(
+            model=llm_id,
+            messages=conversation_history,
+            response_format=response_format
+        )
+        
+        ans = response.choices[0].message.parsed
+        conversation_history.append({"role": "assistant", "content": response.choices[0].message.content})
+        return ans, response.usage.total_tokens, conversation_history
+    else:
+        cron_logger.info(f"LLm Factory not found... {llm_factory}")
+        return
 
 
 def embedding(docs, mdl, parser_config={}):
@@ -200,17 +219,28 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
         body_element = str(soup.find("body"))
         section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
         conversation_history.append({"role": "system", "content": generate_prompt_for_chunks()})
-        cron_logger.info(f"{i+1} url started scrapping... section found:- {section_answer.sections} token used : {token}")
+        
         total_token += token
-        for section in section_answer.sections:
+        section_list = []
+        if isinstance(section_answer, dict):
+            section_list = section_answer.get("sections", [])
+        else:
+            section_list = section_answer.sections
+        cron_logger.info(f"{i+1} url started scrapping... section found:- {section_list} token used : {token}")
+        for section in section_list:
             try:
-                question = f"Create chunks for the ```{section}``` section. Provide only relevant content that the end user will see and understand, breaking it into self-contained, meaningful chunks."
+                question = f"Create chunks for the ```{section}``` section. Provide only relevant content that the end user will see and understand, breaking it into self-contained, meaningful chunks. I want to create chunks for my RAG."
                 answer, token, conversation_history = generate_page_content_gpt(question, llm_factory, llm_id, llm_api_key, conversation_history)
                 total_token += token
                 cks = []
-                for chunk in answer.chunks:
-                    combined_content =  " ".join(chunk.possible_questions) + chunk.content
-                    cks.append(combined_content)
+                if isinstance(answer, dict):
+                    for chunk in answer.get("chunks", []):
+                        combined_content = " ".join(chunk.get("possible_questions", [])) + " " + chunk.get("content", "")
+                        cks.append(combined_content)
+                else:
+                    for chunk in answer.chunks:
+                        combined_content =  " ".join(chunk.possible_questions) + " " + chunk.content
+                        cks.append(combined_content)
                 cron_logger.info(f"chunks created for section: {section} No of chunks: {len(cks)}, used token: {token}")
             except Exception as e:
                 callback(prog, msg="[ERROR]scrape_data_by_urls :{}".format(str(e)))
