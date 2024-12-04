@@ -582,11 +582,11 @@ def naive_merge_docx(sections, chunk_token_num=128, delimiter="\n。；！？"):
 
 def keyword_extraction(chat_mdl, content):
     prompt = """
-You're a question analyzer. 
-1. Please give me the most important keyword/phrase of this question.
-Answer format: (in language of user's question)
- - keyword: 
-"""
+        You're a question analyzer. 
+        1. Please give me the most important keyword/phrase of this question.
+        Answer format: (in language of user's question)
+        - keyword: 
+    """
     kwd = chat_mdl.chat(prompt, [{"role": "user",  "content": content}], {"temperature": 0.2})
     if isinstance(kwd, tuple): return kwd[0]
     return kwd
@@ -641,12 +641,10 @@ def generate_answer_gpt_list_only(content, llm_factory, llm_id, llm_api_key):
         client = OpenAI(api_key=llm_api_key)
         completion = client.beta.chat.completions.parse(
             model = llm_id,
+            
             messages=[
                 {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
-                {
-                    "role": "user",
-                    "content": content
-                }
+                {"role": "user", "content": content}
             ],
             response_format=ListBusinessGPT
         )

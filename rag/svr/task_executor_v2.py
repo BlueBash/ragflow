@@ -12,7 +12,7 @@ from rag.settings import cron_logger, DOC_MAXIMUM_SIZE
 from rag.utils import rmSpace, findMaxTm, num_tokens_from_string
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
 import io, requests, datetime, json, logging, os, hashlib, copy, re, sys, time, yaml, traceback
-from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v2
+from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v2, website_v3
 from api.db import LLMType, ParserType
 from api.db.services.llm_service import LLMBundle
 from api.utils.file_utils import get_project_base_directory
@@ -324,7 +324,7 @@ def main():
     if r["parser_id"].lower()=="website":
         try:
             embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
-            website_v2.chunk(r["tenant_id"], r["kb_id"], r["doc_id"] ,r["name"], embd_mdl, r["llm_factory"], r["llm_id"], r["llm_api_key"], parser_config=r["parser_config"], callback=callback)
+            website_v3.chunk(r["tenant_id"], r["kb_id"], r["doc_id"] ,r["name"], embd_mdl, r["llm_factory"], r["llm_id"], r["llm_api_key"], parser_config=r["parser_config"], callback=callback)
             return
         except Exception as e:
             callback(-1, f"Internal server error while chunking: {str(e)}")

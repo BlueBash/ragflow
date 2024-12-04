@@ -75,64 +75,60 @@ class WebsiteScraper:
             new_links = [link for link in self.internal_links if link not in self.visited_links]
             to_visit.extend(new_links)
 
-
-class ListChunking(BaseModel):
-    chunks: list[str]
-
-def generate_prompt(html_body):
+def generate_prompt_for_chunks():
     prompt = f"""
-    You are a highly skilled content analyst specializing in Retrieval-Augmented Generation (RAG) systems.
+    You are tasked with processing a single section of a webpage and generating multiple meaningful chunks of content for that section. 
+    Break the provided section into **multiple chunks**, each representing a self-contained, coherent unit of information. 
+    Focus on **what the end user sees** and **how it impacts or informs them**, without referring to the underlying HTML structure or characteristics.
 
-    1. **Content Analysis & Chunking**  
-       - Analyze the provided HTML body and extract only meaningful, relevant, and coherent text.  
-       - Divide the content into **self-contained, semantically complete** chunks suitable for RAG.  
-       - Prioritize textual coherence, logical flow, and contextual relevance for each chunk. 
-       - Remove all HTML tags, comments, or extraneous formatting.
+   ### Instructions:
 
-    2. **Metadata Association (Optional)**  
-       - Where applicable, associate each chunk with relevant metadata (e.g., section headers, contextual labels).  
-       - Ensure the metadata helps to clarify the chunk's origin or context within the document (e.g., "Introduction", "Conclusion", etc.).  
+   1. **Section Breakdown**:
+      - Take the content of the provided section and divide it into **multiple chunks**. Each chunk should focus on a distinct, logical piece of information or topic within the section, as **perceived by the end user**.
+      - **Do not reference HTML tags, elements, or structure**. Only focus on what the **end user** would see and understand when they interact with the page.
 
-    **Input:**
-    - HTML Body: {html_body}
+   2. **Chunk Creation**:
+      - **Content**: For each chunk, write content that clearly and fully represents a specific aspect or part of the section, focusing on **how it appears and is understood by the end user**.
+      - **Possible Questions**: For each chunk, generate 3–5 questions that users might ask regarding the content of the chunk. These questions should be relevant and user-centric, reflecting how the content impacts the user.
 
-    **Output Requirements:**  
-    - Return a **list of chunks**. Each chunk must be a valid text string, without HTML tags.
-    - Please ensure that the chunks are clean, well-structured, and meet the specified token limit.
-    - Make sure each chunk has **between 400 to 500 tokens** limit.
-    - Make sure do not create chunk with less than 300 tokens. If a chunk is **less than 300 tokens**, merge it with the nearest chunk to maintain coherence.
+   3. **Chunk Structure**:
+      - Each chunk must contain the following attributes:
+      - **id**: A unique identifier for the chunk, which should be based on the section and the chunk's position (e.g., "section-name-part1", "section-name-part2").
+      - **content**: The content of the chunk, which should be self-contained and meaningful, representing what the user interacts with.
+      - **possible_questions**: A list of 3–5 questions that could be asked by a user based on the chunk’s content.
     """
     return prompt.strip()
 
-def generate_answer_gpt(content, llm_factory, llm_id, llm_api_key):
-    if llm_factory == "Gemini":
-        genai.configure(api_key=llm_api_key)
-        model = genai.GenerativeModel(llm_id)
-        result = model.generate_content(
-            content,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json", response_schema=ListChunking
-            ),
-        )
-        if "content" not in result.candidates[0]:
-            return []
-        return json.loads(result.candidates[0].content.parts[0].text)["chunks"]
-    elif llm_factory == "OpenAI":
-        client = OpenAI(api_key=llm_api_key)
-        completion = client.beta.chat.completions.parse(
-            model = llm_id,
-            messages=[
-                {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
-                {
-                    "role": "user",
-                    "content": content
-                }
-            ],
-            response_format=ListChunking
-        )
-        return completion.choices[0].message.parsed.chunks
+
+class Chunk(BaseModel):
+    id: str
+    content: str
+    possible_questions: list[str]
+
+class ChunkList(BaseModel):
+    chunks: list[Chunk]
+
+class PageSections(BaseModel):
+    sections: list[str]
+
+def generate_page_content_gpt(content, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=True):
+    conversation_history.append({"role": "user", "content": content})
+    client = OpenAI(api_key=llm_api_key)
+    if is_chunking:
+        response_format = ChunkList
     else:
-        cron_logger.info(f"LLm Factory not found... {llm_factory}")
+        response_format = PageSections
+    
+    response = client.beta.chat.completions.parse(
+        model=llm_id,
+        messages=conversation_history,
+        response_format=response_format
+    )
+    
+    ans = response.choices[0].message.parsed
+    conversation_history.append({"role": "assistant", "content": response.choices[0].message.content})
+    return ans, response.usage.total_tokens, conversation_history
+
 
 def embedding(docs, mdl, parser_config={}):
     batch_size = 32
@@ -194,17 +190,31 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
     html_docs = loader.load()
     callback(0.33, f"{len(html_docs)} urls scrapping started...")
     chunk_count = 0
+    total_token = 0
     for i in range(len(html_docs)):
+        conversation_history = [
+            {"role": "system", "content": "You are a highly skilled content analyst specializing in Provide a list of the major sections of the webpage. Provide a list of the major sections of the webpage. example of sections: Header, hero section, footer"}
+        ]
         prog=0.33 + 0.5 * (i + 1) / len(html_docs)
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
-        body_element = soup.find("body")
-        chunks = chunk_text(str(body_element))
-        cron_logger.info(f"{i+1} url started scrapping... {len(chunks)}")
-        for chunk in chunks:
+        body_element = str(soup.find("body"))
+        section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
+        conversation_history.append({"role": "system", "content": generate_prompt_for_chunks()})
+        cron_logger.info(f"{i+1} url started scrapping... section found:- {section_answer.sections} token used : {token}")
+        total_token += token
+        for section in section_answer.sections:
             try:
-                cks = generate_answer_gpt(generate_prompt(chunk), llm_factory, llm_id, llm_api_key)
+                question = f"Create chunks for the ```{section}``` section. Provide only relevant content that the end user will see and understand, breaking it into self-contained, meaningful chunks."
+                answer, token, conversation_history = generate_page_content_gpt(question, llm_factory, llm_id, llm_api_key, conversation_history)
+                total_token += token
+                cks = []
+                for chunk in answer.chunks:
+                    combined_content =  " ".join(chunk.possible_questions) + chunk.content
+                    cks.append(combined_content)
+                cron_logger.info(f"chunks created for section: {section} No of chunks: {len(cks)}, used token: {token}")
             except Exception as e:
-                callback(prog, msg="scrape_data_by_urls error:{}".format(str(e)))
+                callback(prog, msg="[ERROR]scrape_data_by_urls :{}".format(str(e)))
+                cron_logger.info(f"[ERROR]scrape_data_by_urls used token {token}, error: {str(e)}")
                 continue
             cks = tokenize_chunks(cks, doc, eng)
             docs = []
@@ -250,9 +260,8 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
                     Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
                 cron_logger.error(str(es_r))
         if i%3==0:
-            callback(prog, f"{i+1}th url scrapped successfully.", chunk_count)
-
-    callback(1., "Done!", chunk_count)
+            callback(prog, f"{i+1}th url scrapped successfully. token used {total_token}", chunk_count)
+    callback(1., f"Total token used {total_token} \nDone!", chunk_count)
 
 
 def exclude_pattern_from_urls(urls, exclude_patterns):
