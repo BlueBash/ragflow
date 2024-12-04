@@ -25,7 +25,8 @@ from flask_login import login_required, current_user
 from elasticsearch_dsl import Q
 from rag.settings import cron_logger
 from rag.app.qa import rmPrefix, beAdoc
-from rag.nlp import search, rag_tokenizer, keyword_extraction, business_info, business_info_by_gpt, business_info_by_gpt_only
+from rag.nlp import search, rag_tokenizer, keyword_extraction, business_info_by_gpt_only
+from api.db.services.task_service import queue_tasks_v2
 from rag.utils.es_conn import ELASTICSEARCH
 from rag.utils import rmSpace
 from api.db import LLMType, ParserType
@@ -41,133 +42,21 @@ import hashlib
 
 
 
-# @manager.route('/business-info', methods=['POST'])
-# @validate_request("tenant_id", "kb_ids", "llm_factory", "llm_id", "llm_api_key", "url")
-# def get_business_info():
-#     req = request.json
-#     cron_logger.info(f"[chunks_app][business-info] payload :- {req}")
-#     tenant_id = req["tenant_id"]
-#     kb_ids = req["kb_ids"]
-#     doc_ids = req.get("doc_ids", [])
-#     page = int(req.get("page", 1))
-#     size = int(req.get("size", 5))
-#     similarity_threshold = float(req.get("similarity_threshold", 0.2))
-#     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
-#     top = int(req.get("top_k", 5))
-#     url = [req.get("url")]
-
-#     question_list = ["What is the name of the business?", "What is the company's name?"]
-
-#     try:
-#         embd_mdl = LLMBundle(req["embd_factory"], LLMType.EMBEDDING, req["embd_id"], req["embd_api_key"])
-#         rerank_mdl = None
-#         chat_mdl = LLMBundle(req["llm_factory"], LLMType.CHAT, llm_name=req["llm_id"], api_key=req["llm_api_key"])
-#         prompt = """
-#             You are an intelligent assistant that extracts specific information from a provided chunk of text. 
-#             Analyze the text and answer the question accurately based on the given information.
-#             If the answer cannot be found in the chunk, respond with "Not Found"
-#             response answer in minimum words as possible return only answer in maximum 5 words.
-#         """
-
-#         def retrieve_chunks(question):
-#             try:
-#                 return retrievaler.retrieval(
-#                     question, embd_mdl, tenant_id, kb_ids, page, size,
-#                     similarity_threshold, vector_similarity_weight, top,
-#                     doc_ids, rerank_mdl=rerank_mdl
-#                 ).get("chunks", [])
-#             except Exception as e:
-#                 cron_logger.error(f"Error during retrieval for question '{question}': {str(e)}")
-#                 return []
-
-#         for question in question_list:
-#             business_name_chunk_response = "Not Found"
-#             business_name_fallback_response = "Not Found"
-#             chunks = retrieve_chunks(question)
-#             if len(chunks)>0:
-#                 paragraph = "\n".join(chunk.get("content_with_weight", "") for chunk in chunks)
-#                 content = f"### Chunk Data: {paragraph} ### Question: {question}"
-#                 business_name_chunk_response = chat_mdl.chat(prompt, [{"role": "user",  "content": content}], {"temperature": 0.2})
-#                 business_name_chunk_response = business_name_chunk_response.strip()
-
-#             if business_name_chunk_response == "Not Found":
-#                 cron_logger.info(f"chunk method not able to find. now try fallback method to scrape front page of website. {url} and let's try again.")
-#                 business_name_fallback_response = business_info(url, question, req["llm_factory"], req["llm_id"], req["llm_api_key"])
-
-#             if business_name_chunk_response == "Not Found" and business_name_fallback_response == "Not Found":
-#                 cron_logger.info(f"Both methods failed for question: {question}. Trying  next question.")
-#             else:
-#                 cron_logger.info(f"got the bussiness name. from question: {question} now trying to find another question")
-#                 break
-                
-        
-#         business_name = business_name_chunk_response
-#         if business_name_chunk_response == "Not Found":
-#             business_name = business_name_fallback_response
-
-#         if business_name == "Not Found":
-#             cron_logger.info(f"bussiness name Not found.")
-#             data = {"error": "business name Not found."}
-#             return get_json_result(data=data)
-        
-#         question_map = {
-#             "address": f"What is the address of {business_name}?",
-#             "contact_number": f"What is the contact number for {business_name}?",
-#             "email": f"What is the email address of {business_name}?",
-#             "working_hours": f"What is the working hours of {business_name}?",
-#         }
-
-#         response_data = {
-#             "business_name": business_name,
-#         }
-
-#         for key, question in question_map.items():
-#             chunks = retrieve_chunks(question)
-#             if len(chunks)>0:
-#                 paragraph = "\n".join(chunk.get("content_with_weight", "") for chunk in chunks)
-#                 content = f"### Chunk Data: {paragraph} ### Question: {question}"
-#                 chunk_response = chat_mdl.chat(prompt, [{"role": "user", "content": content}], {"temperature": 0.2}).strip()
-#                 cron_logger.info(f"find key: {key}, value: {chunk_response}")
-#                 response_data[key] = chunk_response
-
-#         question = ""
-#         keys_list = []
-#         for key, value in response_data.items():
-#             if value == "Not Found":
-#                 keys_list.append(key)
-#                 question+= "\n"+ question_map[key]
-#         cron_logger.info(f"Finding values for key_list: {keys_list} and question: {question} using chatgpt we have find : {response_data}")
-#         if len(question)>2:
-#             answer = business_info_by_gpt(url, question, req["llm_factory"], req["llm_id"], req["llm_api_key"])
-#             gpt_key_list = ["address", "email", "contact_number", "working_hours"]
-#             if isinstance(answer, dict):
-#                 for key in keys_list:
-#                     response_data[key] = answer.get(key, "Not Found")
-#                 for key in gpt_key_list:
-#                     response_data[f"gpt_{key}"] = answer.get(key, "Not Found")
-#             else:
-#                 for key in keys_list:
-#                     response_data[key] = getattr(answer, key)
-#                 for key in gpt_key_list:
-#                     response_data[f"gpt_{key}"] = getattr(answer, key)
-
-#         return get_json_result(data=response_data)
-#     except Exception as e:
-#         return server_error_response(e)
-
-
-@manager.route('/business-info', methods=['POST'])
-@validate_request("url", "llm_factory", "llm_id", "llm_api_key")
+@manager.route('/quick_scrape', methods=['POST'])
+@validate_request("tenant_id", "kb_id", "doc_id", "url", "llm_factory", "llm_id", "llm_api_key")
 def get_business_info():
     req = request.json
     cron_logger.info(f"[chunks_app][business-info] payload :- {req}")
     url = req.get("url")
+    llm_factory = req.get("llm_factory")
+    llm_id = req.get("llm_id")
+    llm_api_key = req.get("llm_api_key")
 
     try:
         if not is_valid_url(url):
             raise Exception("The URL format is invalid")
         response_data = {}
-        response = business_info_by_gpt_only(url, req["llm_factory"], req["llm_id"], req["llm_api_key"])
+        response = business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key)
         gpt_key_list = ["companyName", "email", "address", "phoneNumbers", "workingHours"]
         if isinstance(response, dict):
             for key in gpt_key_list:
@@ -175,7 +64,28 @@ def get_business_info():
         else:
             for key in gpt_key_list:
                 response_data[key] = getattr(response, key)
-     
+
+        payload = {
+            "tenant_id": req.get("tenant_id"),
+            "kb_id": req.get("kb_id"),
+            "embd_factory": req.get("embd_factory", "BAAI"),
+            "embd_id": req.get("embd_id", "BAAI"),
+            "embd_api_key": req.get("embd_api_key", "BAAI"),
+            "llm_factory": llm_factory,
+            "llm_id": llm_id,
+            "llm_api_key": llm_api_key,
+            "doc_id": req.get("doc_id"),
+            "url": req.get("url"),
+            "name": req.get("url"),
+            "parser_id": 'website',
+            "parser_config": {
+                "scrap_website": True,
+                "exclude_urls": []
+            }
+        }
+        cron_logger.info(f"[chunks][quick_scrape] Task is queued with payload: {payload}")
+        queue_tasks_v2(payload)
+
         return get_json_result(data=response_data)
     except Exception as e:
         return server_error_response(e)

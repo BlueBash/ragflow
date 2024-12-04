@@ -92,15 +92,16 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     if prog is not None and prog < 0:
         msg = "[ERROR] " + msg
         cancel_job = True
-        
-    result = get_task_status(doc_id)
-    progress = result.get("progress", -1)
-    cron_logger.info(f"get_task_status-> progress: {progress}")
-    if result.get("progress")==-1:
-        msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
-        cron_logger.info(msg)
-        cancel_job = True
-        prog = -1
+
+    if prog!=0.1:
+        result = get_task_status(doc_id)
+        progress = result.get("progress", -1)
+        cron_logger.info(f"get_task_status-> progress: {progress}")
+        if result.get("progress")==-1:
+            msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
+            cron_logger.info(msg)
+            cancel_job = True
+            prog = -1
 
     if msg:
         progress_message = progress_message+ "\n "+ msg
@@ -178,21 +179,14 @@ def build(row):
         set_progress(row["doc_id"], prog=-1, msg=f"chunk type is invalis: {str(e)}")
         return
     callback = partial(set_progress, row["doc_id"])
+    st = timer()
+    doc_id = row.get("doc_id", 222)
+    url = row.get("url", "https://example.com/")
     try:
-        st = timer()
-        doc_id = row["doc_id"]
-        url = row["url"]
-        if row["parser_id"]!="website":
-            try:
-                binary = get_binary_from_url(doc_id, url)
-            except Exception as e:
-                callback(-1, f"Get file from url: { str(e)}")
-                cron_logger.error(f"Error in file {row['url']}: {str(e)}")
-                return
-        else:
-            binary = url
-
+        binary = get_binary_from_url(doc_id, url)
     except Exception as e:
+        callback(-1, f"Get file from url: { str(e)}")
+        cron_logger.error(f"Error in file {row['url']}: {str(e)}")
         return
     
     try:
@@ -206,11 +200,8 @@ def build(row):
         return []
 
     try:
-        if row["parser_id"].lower()=="website":
-            cks = website_v2.chunk(row["name"], row["llm_factory"], row["llm_id"], row["llm_api_key"], parser_config=row["parser_config"], callback=callback)
-        else:
-            cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
-                                kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])
+        cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
+                            kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])
         
         cron_logger.info("Chunking({}) /{}".format(timer() - st, row["name"]))
     except Exception as e:
@@ -330,87 +321,98 @@ def main():
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
-    cks = build(r)
-    cron_logger.info("Build chunks({}): {}".format(r["name"], timer() - st))
-    if cks is None:
-        return
-    if not cks:
-        callback(-1, msg="No Chnuks to embed.")
-        return
-    # TODO: exception handler
-    ## set_progress(r["did"], -1, "ERROR: ")
-    callback(0.7, msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
-    try:
-        embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
-    except Exception as e:
-        cron_logger.error(str(e))
-
-    st = timer()
-    try:
-        tk_count = embedding(cks, embd_mdl, r["parser_config"], callback)
-    except Exception as e:
-        callback(-1, msg="Embedding error:{}".format(str(e)))
-        cron_logger.error(str(e))
-        tk_count = 0
-    cron_logger.info("Embedding elapsed({}): {:.2f}".format(r["name"], timer() - st))
-    callback(0.75, msg="Finished embedding({:.2f})! Start to build index!".format(timer() - st))
-
-    init_kb(r)
-    chunk_count = len(set([c["_id"] for c in cks]))
-    st = timer()
-    es_r = ""
-    es_bulk_size = 4
-    len_cks = len(cks)
-    for b in range(0, len_cks, es_bulk_size):
-        es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
-        if b%32==0:
-            callback(prog=0.8 + 0.1 * (b + 1) / len(cks), msg="")
-
-    cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
-    use_raptor = r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False)
-    if es_r:
-        callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
-        ELASTICSEARCH.deleteByQuery(
-            Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
-        cron_logger.error(str(es_r))
-    else:
-        # check cancel job status
-        if use_raptor:
-            callback(0.9, "Start Raptor")
-        else:
-            callback(1., "Done!", chunk_count)
-        cron_logger.info(
-            "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(r["doc_id"], tk_count, len(cks), timer() - st))
-    import time
-    time.sleep(2)
-
-
-    #RAPTOR
-    if use_raptor:
+    if r["parser_id"].lower()=="website":
         try:
-            chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, r["llm_id"], r["llm_api_key"])
-            cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback)
+            embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
+            website_v2.chunk(r["tenant_id"], r["kb_id"], r["doc_id"] ,r["name"], embd_mdl, r["llm_factory"], r["llm_id"], r["llm_api_key"], parser_config=r["parser_config"], callback=callback)
+            return
         except Exception as e:
-            callback(-1, msg=str(e))
+            callback(-1, f"Internal server error while chunking: {str(e)}")
+            cron_logger.error(f"Chunking {r['name']}: {str(e)}")
+            traceback.print_exc()
+            return
+    else:
+        cks = build(r)
+        cron_logger.info("Build chunks({}): {}".format(r["name"], timer() - st))
+        if cks is None:
+            return
+        if not cks:
+            callback(-1, msg="No Chnuks to embed.")
+            return
+        # TODO: exception handler
+        ## set_progress(r["did"], -1, "ERROR: ")
+        callback(0.7, msg="Finished slicing files(%d). Start to embedding the content." % len(cks))
+        try:
+            embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
+        except Exception as e:
             cron_logger.error(str(e))
 
+        st = timer()
+        try:
+            tk_count = embedding(cks, embd_mdl, r["parser_config"], callback)
+        except Exception as e:
+            callback(-1, msg="Embedding error:{}".format(str(e)))
+            cron_logger.error(str(e))
+            tk_count = 0
+        cron_logger.info("Embedding elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        callback(0.75, msg="Finished embedding({:.2f})! Start to build index!".format(timer() - st))
+
         init_kb(r)
-        chunk_count = len(set([c["_id"] for c in cks]))+chunk_count
+        chunk_count = len(set([c["_id"] for c in cks]))
         st = timer()
         es_r = ""
         es_bulk_size = 4
-        for b in range(0, len(cks), es_bulk_size):
+        len_cks = len(cks)
+        for b in range(0, len_cks, es_bulk_size):
             es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
-            if b % 128 == 0:
-                callback(prog=0.9 + 0.1 * (b + 1) / len(cks), msg="")
+            if b%32==0:
+                callback(prog=0.8 + 0.1 * (b + 1) / len(cks), msg="")
 
         cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        use_raptor = r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False)
         if es_r:
             callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
             ELASTICSEARCH.deleteByQuery(
                 Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
             cron_logger.error(str(es_r))
-        callback(1., "Done RAPTOR!", chunk_count)
+        else:
+            # check cancel job status
+            if use_raptor:
+                callback(0.9, "Start Raptor")
+            else:
+                callback(1., "Done!", chunk_count)
+            cron_logger.info(
+                "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(r["doc_id"], tk_count, len(cks), timer() - st))
+        import time
+        time.sleep(2)
+
+
+        #RAPTOR
+        if use_raptor:
+            try:
+                chat_mdl = LLMBundle(r["llm_factory"], LLMType.CHAT, r["llm_id"], r["llm_api_key"])
+                cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback)
+            except Exception as e:
+                callback(-1, msg=str(e))
+                cron_logger.error(str(e))
+
+            init_kb(r)
+            chunk_count = len(set([c["_id"] for c in cks]))+chunk_count
+            st = timer()
+            es_r = ""
+            es_bulk_size = 4
+            for b in range(0, len(cks), es_bulk_size):
+                es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(r["tenant_id"]))
+                if b % 128 == 0:
+                    callback(prog=0.9 + 0.1 * (b + 1) / len(cks), msg="")
+
+            cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+            if es_r:
+                callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
+                ELASTICSEARCH.deleteByQuery(
+                    Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
+                cron_logger.error(str(es_r))
+            callback(1., "Done RAPTOR!", chunk_count)
 
 
 def report_status():
