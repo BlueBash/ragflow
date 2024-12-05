@@ -9,7 +9,7 @@ export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
 
 PY=python3
 if [[ -z "$WS" || $WS -lt 1 ]]; then
-  WS=1
+  WS=2
 fi
 
 function task_exe(){
