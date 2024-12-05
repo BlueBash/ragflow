@@ -205,7 +205,7 @@ def init_kb(tenant_id):
         open(os.path.join(get_project_base_directory(), "conf", "mapping.json"), "r")))
 
 
-def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=None):
+def scrape_data_by_urls(urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=None):
     loader = AsyncHtmlLoader(web_path=urls)
     html_docs = loader.load()
     chunk_count = 0
@@ -252,12 +252,16 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
                 callback(prog, f"[ERROR]scrape_data_by_urls :{str(e)}", chunk_count)
                 cron_logger.info(f"[ERROR]scrape_data_by_urls used token {token}, error: {str(e)}")
                 continue
-        cks = tokenize_chunks(cks, doc, eng)
+        
         docs = []
         doc = {
             "doc_id": doc_id,
-            "kb_id": [str(kb_id)]
+            "kb_id": [str(kb_id)],
+            "docnm_kwd": urls[i],
+            "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", urls[i])),
         }
+        doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
+        cks = tokenize_chunks(cks, doc, eng)
         for ck in cks:
             d = copy.deepcopy(doc)
             d.update(ck)
@@ -329,12 +333,6 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         callback(-1, "The URL format is invalid")
 
     eng ="english"
-    doc = {
-        "docnm_kwd": filename,
-        "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
-    }
-   
-    doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     scrap_website = parser_config.get("scrap_website", "false")
     exclude_patterns = parser_config.get("exclude_urls", [])
     unique_urls=[]
@@ -361,8 +359,8 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
             unique_urls = unique_urls[:30]
             cron_logger.info(f"Urls stripped beacuse it container more then 30 URLS: {unique_urls} strted Scrapping...")
         callback(0.29, f"Currently we are scrapping only {len(unique_urls)} urls . Scrapping Started.")
-        scrape_data_by_urls(unique_urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
+        scrape_data_by_urls(unique_urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
     else:
         callback(0.25, "Start scrapping web page Only.")
-        unique_urls = filename
-        scrape_data_by_urls(unique_urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
+        unique_urls = [filename]
+        scrape_data_by_urls(unique_urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
