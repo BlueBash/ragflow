@@ -318,22 +318,23 @@ def main():
     if len(r)==0:
         return
     cron_logger.info(f"[task_executor_v2] PAYLOAD RECEIVED:- {r}")
+    doc_id = r["doc_id"]
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
     if r["parser_id"].lower()=="website":
         try:
             embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
-            website_v3.chunk(r["tenant_id"], r["kb_id"], r["doc_id"] ,r["name"], embd_mdl, r["llm_factory"], r["llm_id"], r["llm_api_key"], parser_config=r["parser_config"], callback=callback)
+            website_v3.chunk(r["tenant_id"], r["kb_id"], doc_id ,r["name"], embd_mdl, r["llm_factory"], r["llm_id"], r["llm_api_key"], parser_config=r["parser_config"], callback=callback)
             return
         except Exception as e:
             callback(-1, f"Internal server error while chunking: {str(e)}")
-            cron_logger.error(f"Chunking {r['name']}: {str(e)}")
+            cron_logger.error(f"for doc_id: {doc_id}, Chunking {r['name']}: {str(e)}")
             traceback.print_exc()
             return
     else:
         cks = build(r)
-        cron_logger.info("Build chunks({}): {}".format(r["name"], timer() - st))
+        cron_logger.info(f"for doc_id: {doc_id}, Build chunks({r['name']}): {timer() - st}")
         if cks is None:
             return
         if not cks:
@@ -345,16 +346,16 @@ def main():
         try:
             embd_mdl = LLMBundle(r["embd_factory"], LLMType.EMBEDDING, r["embd_id"], r["embd_api_key"])
         except Exception as e:
-            cron_logger.error(str(e))
+            cron_logger.error(f"for doc_id: {doc_id}, Error: {str(e)}")
 
         st = timer()
         try:
             tk_count = embedding(cks, embd_mdl, r["parser_config"], callback)
         except Exception as e:
             callback(-1, msg="Embedding error:{}".format(str(e)))
-            cron_logger.error(str(e))
+            cron_logger.error(f"for doc_id: {doc_id}, Error: {str(e)}")
             tk_count = 0
-        cron_logger.info("Embedding elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        cron_logger.info(f"for doc_id: {doc_id}, Embedding elapsed({r['name']}): {timer() - st:.2f}")
         callback(0.75, msg="Finished embedding({:.2f})! Start to build index!".format(timer() - st))
 
         init_kb(r)
@@ -368,24 +369,20 @@ def main():
             if b%32==0:
                 callback(prog=0.8 + 0.1 * (b + 1) / len(cks), msg="")
 
-        cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+        cron_logger.info(f"for doc_id: {doc_id}, Indexing elapsed({r['name']}): {timer() - st:.2f}")
         use_raptor = r.get("parser_config", {}).get("raptor", {}).get("use_raptor", False)
         if es_r:
             callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
             ELASTICSEARCH.deleteByQuery(
                 Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
-            cron_logger.error(str(es_r))
+            cron_logger.error(f"Error for doc_id {doc_id}: {str(es_r)}")
         else:
-            # check cancel job status
             if use_raptor:
                 callback(0.9, "Start Raptor")
             else:
                 callback(1., "Done!", chunk_count)
-            cron_logger.info(
-                "Chunk doc({}), token({}), chunks({}), elapsed:{:.2f}".format(r["doc_id"], tk_count, len(cks), timer() - st))
         import time
         time.sleep(2)
-
 
         #RAPTOR
         if use_raptor:
@@ -394,7 +391,7 @@ def main():
                 cks, tk_count = run_raptor(r, chat_mdl, embd_mdl, callback)
             except Exception as e:
                 callback(-1, msg=str(e))
-                cron_logger.error(str(e))
+                cron_logger.error(f"Error for doc_id({doc_id}): {str(e)}")
 
             init_kb(r)
             chunk_count = len(set([c["_id"] for c in cks]))+chunk_count
@@ -406,12 +403,12 @@ def main():
                 if b % 128 == 0:
                     callback(prog=0.9 + 0.1 * (b + 1) / len(cks), msg="")
 
-            cron_logger.info("Indexing elapsed({}): {:.2f}".format(r["name"], timer() - st))
+            cron_logger.info(f"for doc_id: {doc_id}, Indexing elapsed({r['name']}): {timer() - st:.2f}")
             if es_r:
                 callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
                 ELASTICSEARCH.deleteByQuery(
                     Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
-                cron_logger.error(str(es_r))
+                cron_logger.error(f"Error for doc_id {doc_id}: {str(es_r)}")
             callback(1., "Done RAPTOR!", chunk_count)
 
 

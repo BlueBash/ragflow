@@ -199,7 +199,7 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
         body_element = soup.find("body")
         chunks = chunk_text(str(body_element))
-        cron_logger.info(f"{i+1} url started scrapping... {len(chunks)}")
+        cron_logger.info(f"{i+1} url started scrapping... {len(chunks)} for doc_id: {doc_id}")
         for chunk in chunks:
             try:
                 cks = generate_answer_gpt(generate_prompt(chunk), llm_factory, llm_id, llm_api_key)
@@ -235,7 +235,7 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
                     continue
             except Exception as e:
                 callback(prog=prog, msg="Embedding error:{}".format(str(e)))
-                cron_logger.error(str(e))
+                cron_logger.error(f"str(e), for doc_id: {doc_id}")
                 tk_count = 0
                 continue
             chunk_count += len(set([c["_id"] for c in cks]))
@@ -248,7 +248,7 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
                 callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
                 ELASTICSEARCH.deleteByQuery(
                     Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-                cron_logger.error(str(es_r))
+                cron_logger.error(f"str(es_r), for doc_id: {doc_id}")
         if i%3==0:
             callback(prog, f"{i+1}th url scrapped successfully.", chunk_count)
 
@@ -277,7 +277,7 @@ def exclude_pattern_from_urls(urls, exclude_patterns):
 
 
 def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm_api_key, parser_config, callback=None):
-    cron_logger.info("inside website chunk...")
+    cron_logger.info(f"inside website chunk... for doc_id: {doc_id}")
     callback(0.1, "Start to parse.")
     ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
     init_kb(tenant_id)
@@ -299,17 +299,15 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         scraper = WebsiteScraper(base_url=filename, delay=2)
         scraper.crawl(max_pages=1)
         urls = list(scraper.internal_links)
-        cron_logger.info(f"len of total url:- {len(urls)}")
-        cron_logger.info(f"[website][chunks]: URLS scrape before exclude:- {urls}")
+        cron_logger.info(f"len of total url:- {len(urls)} for doc_id: {doc_id} and url: {filename}")
         processed_urls = {
             url.rstrip('/').removesuffix('/#content') if url.endswith('/#content') else url.rstrip('/')
             for url in urls
         }
         unique_urls = list(set(processed_urls))
         unique_urls = exclude_pattern_from_urls(unique_urls, exclude_patterns)
-        cron_logger.info(f"[website][chunks]: URLS scrappscrapeing after exclude {unique_urls}")
         callback(0.3, "Extract unique url Done.")
-        cron_logger.info(f"len of unique url:- {len(unique_urls)}")
+        cron_logger.info(f"len of unique url:- {len(unique_urls)} for doc_id: {doc_id} and url {filename}")
         scrape_data_by_urls(unique_urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
     else:
         callback(0.25, "Start scrapping web page Only.")
