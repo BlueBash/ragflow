@@ -102,10 +102,6 @@ def generate_prompt_for_chunks():
     return prompt.strip()
 
 
-
-
-
-
 class Chunk(BaseModel):
     content: str
     possible_questions: list[str]
@@ -217,14 +213,30 @@ def scrape_data_by_urls(urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_facto
         prog=0.33 + 0.5 * (i + 1) / len(html_docs)
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
         html_body_lenght = len(str(soup.find("body")))
-        cron_logger.info(f"lenght before remove script tag: {html_body_lenght}")
-        for script in soup.find_all("script"):
-            script.decompose()
+        cron_logger.info(f"lenght before script tag: {html_body_lenght}")
+        tags_to_remove = ["script", "style", "link", "iframe", "svg", "noscript"]
+        for tag in tags_to_remove:
+            for element in soup.find_all(tag):
+                element.decompose()
 
         body_element = str(soup.find("body"))
-        cron_logger.info(f"lenght after remove script tag: {len(body_element)}")
-        section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
-        conversation_history[0] ={"role": "system", "content": generate_prompt_for_chunks()}
+        cron_logger.info(f"lenght after remove tag: {len(body_element)}")
+        try:
+            section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
+        except Exception as e:
+            error_message = str(e)
+            if "context_length_exceeded" in error_message:
+                callback(prog, f"[ERROR] Maximum token limit exceeded", chunk_count)
+                cron_logger.error(f"[ERROR] Maximum context length exceeded: used token {token}, error: {error_message}")
+            else:
+                callback(prog, f"[ERROR] scrape_data_by_urls: {error_message}", chunk_count)
+                cron_logger.error(f"[ERROR] scrape_data_by_urls used token {token}, error: {error_message}")
+            continue
+
+        conversation_history = [
+            {"role": "system", "content": generate_prompt_for_chunks()},
+            {"role": "user", "content": body_element}
+        ]
         
         total_token += token
         section_list = []
@@ -299,7 +311,10 @@ def scrape_data_by_urls(urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_facto
             ELASTICSEARCH.deleteByQuery(
                 Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
             cron_logger.error(str(es_r))
-        callback(prog, f"{i+1} url Done. Total token used {total_token}", chunk_count)
+        if i%5==0 or i<5:
+            callback(prog, f"{i+1} url Done. Total token used {total_token}", chunk_count)
+        else:
+            callback(prog, "", chunk_count)
     callback(1., f"Total token used {total_token} \nDone!", chunk_count)
 
 

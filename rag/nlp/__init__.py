@@ -600,23 +600,6 @@ import google.generativeai as genai
 from rag.settings import cron_logger
 from langchain_community.document_loaders import AsyncHtmlLoader
 
-
-def generate_prompt_gpt_only(final_content):
-    prompt = f"""
-    You are an intelligent assistant that extracts specific information from a provided html text.
-    Analyze the text and answer the question accurately based on the given information.
-    Response answer in minimum words as possible.
-
-    This is the page of website:
-
-    Below is the HTML:
-    {final_content}
-    Above is the HTML.
-
-    """
-    return prompt.strip()
-
-
 class ListBusinessGPT(BaseModel):
     companyName: str
     email: str
@@ -643,7 +626,14 @@ def generate_answer_gpt_list_only(content, llm_factory, llm_id, llm_api_key):
             model = llm_id,
             
             messages=[
-                {"role": "system", "content": "Expert in text extraction, chunking, and semantic content analysis."},
+                {"role": "system", "content": """
+                    You are an assistant designed to extract specific business information from a given text. Your task is to identify and extract the following details for each business:
+                    - companyName
+                    - email
+                    - address
+                    - phoneNumbers (list of phone numbers)
+                    - workingHours (list of working hours)
+                    """},
                 {"role": "user", "content": content}
             ],
             response_format=ListBusinessGPT
@@ -656,11 +646,33 @@ def extract_html(urls):
     loader = AsyncHtmlLoader(web_path=urls)
     docs = loader.load()
     soup = BeautifulSoup(docs[0].page_content, 'html.parser')
-    return str(soup)
+    return soup
 
 def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
-    final_content = extract_html([url])
+    soup = extract_html([url])
     cron_logger.info("generate html body done.")
-    answer = generate_answer_gpt_list_only(generate_prompt_gpt_only(final_content), llm_factory, llm_id, llm_api_key)
-    cron_logger.info(f"answer by model: {answer}")
+    
+    try:
+        cron_logger.info(f"len of html {len(str(soup))} len of body {len(str(soup.find("body")))}")
+        answer = generate_answer_gpt_list_only(str(soup), llm_factory, llm_id, llm_api_key)
+        cron_logger.info(f"answer by model: {answer}")
+    except Exception as e:
+        error_message = str(e)
+        if "context_length_exceeded" in error_message:
+            cron_logger.error(f"[ERROR] Maximum context length exceeded, error: {error_message}")
+            script_tag  = soup.find_all("script")
+            footer_tag = soup.find_all("footer")
+            final_content = str(script_tag)+ str(footer_tag)
+            cron_logger.info(f"len of script {len(str(script_tag))} len of footer {len(str(footer_tag))}")
+            try:
+                answer = generate_answer_gpt_list_only(final_content, llm_factory, llm_id, llm_api_key)
+                cron_logger.info(f"answer by model (half content): {answer}")
+            except Exception as second_exception:
+                second_error_message = str(second_exception)
+                cron_logger.error(f"[ERROR] Failed to generate answer with half content, error: {second_error_message}")
+                return False
+        else:
+            cron_logger.error(f"[ERROR] scrape_data_by_urls, error: {error_message}")
+            return False
+            
     return answer
