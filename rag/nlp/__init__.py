@@ -653,7 +653,8 @@ def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
     cron_logger.info("generate html body done.")
     
     try:
-        cron_logger.info(f"len of html {len(str(soup))} len of body {len(str(soup.find("body")))}")
+        html_body_length = len(str(soup.find("body")))
+        cron_logger.info(f"len of html {len(str(soup))} len of body {html_body_length}")
         answer = generate_answer_gpt_list_only(str(soup), llm_factory, llm_id, llm_api_key)
         cron_logger.info(f"answer by model: {answer}")
     except Exception as e:
