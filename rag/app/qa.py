@@ -325,7 +325,7 @@ def chunk(filename, binary=None, lang="Chinese", callback=None, **kwargs):
         reader = csv.reader(csv_file)
         lines = list(reader)
         fails = []
-        for i, arr in enumerate(lines):
+        for i, arr in enumerate(lines[1:]):
             if len(arr) != 2:
                 fails.append(str(i+1))
             elif len(arr) == 2:

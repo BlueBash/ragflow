@@ -77,37 +77,38 @@ class WebsiteScraper:
 
 def generate_prompt_for_chunks():
     prompt = f"""
-    You are a highly skilled content analyst specializing in Retrieval-Augmented Generation (RAG) systems.
-    You are tasked with processing a single section of a webpage and generating multiple meaningful chunks of content for that section. 
-    Break the provided section into **multiple chunks**, each representing a self-contained, coherent unit of information. 
-    Focus on **what the end user sees** and **how it impacts or informs them**, without referring to the underlying HTML structure or characteristics.
+            You are a skilled content processor specializing in creating structured knowledge chunks for Retrieval-Augmented Generation (RAG) systems. 
+            Your task is to analyze the provided content and generate one comprehensive chunk of information that can be stored in a database.
 
-   ### Instructions:
+            ### Instructions:
 
-   1. **Section Breakdown**:
-      - Take the content of the provided section and divide it into **multiple chunks**. Each chunk should focus on a distinct, logical piece of information or topic within the section, as **perceived by the end user**.
-      - **Do not reference HTML tags, elements, or structure**. Only focus on what the **end user** would see and understand when they interact with the page.
+            1. **Content Creation**:
+                - Carefully analyze the provided content and extract all meaningful and relevant details related to the business.
+                - Focus on providing information that answers practical, business-specific queries a user might have, such as services offered or general business operations.
+                - Avoid references to webpage sections, HTML structure, or technical terms (e.g., "navigation menu," "header," "footer," "form").
+                - Instead, use the **business name** or relevant business context to describe the services and offerings.
+                - The content should be clear, relevant, and aligned with the user's informational needs, expressed in a straightforward manner.
+                - **Do not create any questions yet**; your sole focus should be on writing the content, ensuring it fully represents the information the user would perceive.
 
-   2. **Chunk Creation**:
-      - **Content**: For each chunk, write content that clearly and fully represents a specific aspect or part of the section, focusing on **how it appears and is understood by the end user**.
-      - **Possible Questions**: For each chunk, generate 3–5 questions that users might ask regarding the content of the chunk. These questions should be relevant and user-centric, reflecting how the content impacts the user.
+            2. **Question Generation**:
+                - After the content is fully created, generate 3–5 user-centric questions based on the content. These questions should reflect practical inquiries a user might have, such as "What services does [Business Name] provide?"
+                - The questions should be based solely on the content you created and should not include references to the technical structure or HTML aspects of the webpage.
+                - **Do not create questions until the content is fully completed**. The questions should arise naturally from the content.
 
-   3. **Chunk Structure**:
-      - Each chunk must contain the following attributes:
-      - **id**: A unique identifier for the chunk, which should be based on the section and the chunk's position (e.g., "section-name-part1", "section-name-part2").
-      - **content**: The content of the chunk, which should be self-contained and meaningful, representing what the user interacts with.
-      - **possible_questions**: A list of 3–5 questions that could be asked by a user based on the chunk’s content.
+            3. **Final Note**:
+                - The content and the questions will be combined together into a single chunk for storage in a RAG system.
+                - **Do not worry about self-contained content**. Both the content and the questions will be merged into a single chunk, so focus on writing clear, user-focused content and questions, without referencing any technical or HTML structure.
     """
     return prompt.strip()
 
 
+
+
+
+
 class Chunk(BaseModel):
-    id: str
     content: str
     possible_questions: list[str]
-
-class ChunkList(BaseModel):
-    chunks: list[Chunk]
 
 class PageSections(BaseModel):
     sections: list[str]
@@ -115,7 +116,7 @@ class PageSections(BaseModel):
 def generate_page_content_gpt(content, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=True):
     conversation_history.append({"role": "user", "content": content})
     if is_chunking:
-        response_format = ChunkList
+        response_format = Chunk
     else:
         response_format = PageSections
     if llm_factory == "Gemini":
@@ -207,7 +208,6 @@ def init_kb(tenant_id):
 def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=None):
     loader = AsyncHtmlLoader(web_path=urls)
     html_docs = loader.load()
-    callback(0.33, f"{len(html_docs)} urls scrapping started...")
     chunk_count = 0
     total_token = 0
     for i in range(len(html_docs)):
@@ -216,9 +216,14 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
         ]
         prog=0.33 + 0.5 * (i + 1) / len(html_docs)
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
+        cron_logger.info(f"lenght before remove script tag: {len(str(soup.find("body")))}")
+        for script in soup.find_all("script"):
+            script.decompose()
+
         body_element = str(soup.find("body"))
+        cron_logger.info(f"lenght after remove script tag: {len(body_element)}")
         section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
-        conversation_history.append({"role": "system", "content": generate_prompt_for_chunks()})
+        conversation_history[0] ={"role": "system", "content": generate_prompt_for_chunks()}
         
         total_token += token
         section_list = []
@@ -226,71 +231,70 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
             section_list = section_answer.get("sections", [])
         else:
             section_list = section_answer.sections
-        cron_logger.info(f"{i+1} url started scrapping... section found:- {section_list} token used : {token}")
+        cron_logger.info(f"working on {i+1} url scrapping... section found:- {section_list} token used : {token}")
+        cks = []
         for section in section_list:
             try:
-                question = f"Create chunks for the ```{section}``` section. Provide only relevant content that the end user will see and understand, breaking it into self-contained, meaningful chunks. I want to create chunks for my RAG."
+                question = (f"""Create a detailed summary of the '{section}' focusing on user-relevant details,
+                             avoiding references to section names or HTML structure. Afterward, generate 3–5 user-centric questions related to the content.""")
+
                 answer, token, conversation_history = generate_page_content_gpt(question, llm_factory, llm_id, llm_api_key, conversation_history)
                 total_token += token
-                cks = []
+                
                 if isinstance(answer, dict):
-                    for chunk in answer.get("chunks", []):
-                        combined_content = " ".join(chunk.get("possible_questions", [])) + " " + chunk.get("content", "")
-                        cks.append(combined_content)
+                    combined_content ="Questions: " + " ".join(answer.get("possible_questions", [])) + " Answer: " + answer.get("content", "")
                 else:
-                    for chunk in answer.chunks:
-                        combined_content =  " ".join(chunk.possible_questions) + " " + chunk.content
-                        cks.append(combined_content)
-                cron_logger.info(f"chunks created for section: {section} No of chunks: {len(cks)}, used token: {token}")
+                    combined_content ="Questions: " + " ".join(answer.possible_questions) + " Answer: " + answer.content
+                cks.append(combined_content)
+                cron_logger.info(f"chunk created for url: {urls[i]}, section: {section}, used token: {token}")
             except Exception as e:
-                callback(prog, msg="[ERROR]scrape_data_by_urls :{}".format(str(e)))
+                callback(prog, f"[ERROR]scrape_data_by_urls :{str(e)}", chunk_count)
                 cron_logger.info(f"[ERROR]scrape_data_by_urls used token {token}, error: {str(e)}")
                 continue
-            cks = tokenize_chunks(cks, doc, eng)
-            docs = []
-            doc = {
-                "doc_id": doc_id,
-                "kb_id": [str(kb_id)]
-            }
-            for ck in cks:
-                d = copy.deepcopy(doc)
-                d.update(ck)
-                md5 = hashlib.md5()
-                md5.update((ck["content_with_weight"] +
-                            str(d["doc_id"])).encode("utf-8"))
-                d["_id"] = md5.hexdigest()
-                d["create_time"] = str(datetime.datetime.now()).replace("T", " ")[:19]
-                d["create_timestamp_flt"] = datetime.datetime.now().timestamp()
-                if not d.get("image"):
-                    docs.append(d)
-                    continue
-                else:
-                    del d["image"]
-                    docs.append(d)
-            cks = docs
-            try:
-                if len(cks)>0:
-                    tk_count = embedding(cks, embd_mdl)
-                else:
-                    continue
-            except Exception as e:
-                callback(prog=prog, msg="Embedding error:{}".format(str(e)))
-                cron_logger.error(str(e))
-                tk_count = 0
+        cks = tokenize_chunks(cks, doc, eng)
+        docs = []
+        doc = {
+            "doc_id": doc_id,
+            "kb_id": [str(kb_id)]
+        }
+        for ck in cks:
+            d = copy.deepcopy(doc)
+            d.update(ck)
+            md5 = hashlib.md5()
+            md5.update((ck["content_with_weight"] +
+                        str(d["doc_id"])).encode("utf-8"))
+            d["_id"] = md5.hexdigest()
+            d["create_time"] = str(datetime.datetime.now()).replace("T", " ")[:19]
+            d["create_timestamp_flt"] = datetime.datetime.now().timestamp()
+            if not d.get("image"):
+                docs.append(d)
                 continue
-            chunk_count += len(set([c["_id"] for c in cks]))
-            es_r = ""
-            es_bulk_size = 4
-            len_cks = len(cks)
-            for b in range(0, len_cks, es_bulk_size):
-                es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(tenant_id))
-            if es_r:
-                callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
-                ELASTICSEARCH.deleteByQuery(
-                    Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-                cron_logger.error(str(es_r))
-        if i%3==0:
-            callback(prog, f"{i+1}th url scrapped successfully. token used {total_token}", chunk_count)
+            else:
+                del d["image"]
+                docs.append(d)
+        cks = docs
+        try:
+            if len(cks)>0:
+                tk_count = embedding(cks, embd_mdl)
+            else:
+                continue
+        except Exception as e:
+            callback(prog, f"Embedding error:{str(e)}", chunk_count)
+            cron_logger.error(str(e))
+            tk_count = 0
+            continue
+        chunk_count += len(set([c["_id"] for c in cks]))
+        es_r = ""
+        es_bulk_size = 4
+        len_cks = len(cks)
+        for b in range(0, len_cks, es_bulk_size):
+            es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(tenant_id))
+        if es_r:
+            callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
+            ELASTICSEARCH.deleteByQuery(
+                Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
+            cron_logger.error(str(es_r))
+        callback(prog, f"{i+1} url Done. Total token used {total_token}", chunk_count)
     callback(1., f"Total token used {total_token} \nDone!", chunk_count)
 
 
@@ -336,7 +340,7 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
     if scrap_website:
         callback(0.25, "Start scrapping full website.")
         scraper = WebsiteScraper(base_url=filename, delay=2)
-        scraper.crawl(max_pages=1)
+        scraper.crawl(max_pages=5)
         urls = list(scraper.internal_links)
         cron_logger.info(f"len of total url:- {len(urls)}")
         cron_logger.info(f"[website][chunks]: URLS scrape before exclude:- {urls}")
@@ -346,9 +350,16 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         }
         unique_urls = list(set(processed_urls))
         unique_urls = exclude_pattern_from_urls(unique_urls, exclude_patterns)
-        cron_logger.info(f"[website][chunks]: URLS scrappscrapeing after exclude {unique_urls}")
-        callback(0.3, "Extract unique url Done.")
+        cron_logger.info(f"[website][chunks]: URLS scrapping after exclude {unique_urls}")
+        if filename in unique_urls:
+            unique_urls.remove(filename)
+        unique_urls = [filename] + unique_urls
+        callback(0.28, f"Found {len(unique_urls)} urls.")
         cron_logger.info(f"len of unique url:- {len(unique_urls)}")
+        if len(unique_urls)>30:
+            unique_urls = unique_urls[:30]
+            cron_logger.info(f"Urls stripped beacuse it container more then 30 URLS: {unique_urls} strted Scrapping...")
+        callback(0.29, f"Currently we are scrapping only {len(unique_urls)} urls . Scrapping Started.")
         scrape_data_by_urls(unique_urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, callback=callback)
     else:
         callback(0.25, "Start scrapping web page Only.")
