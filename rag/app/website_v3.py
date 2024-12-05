@@ -216,7 +216,8 @@ def scrape_data_by_urls(urls, doc, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_
         ]
         prog=0.33 + 0.5 * (i + 1) / len(html_docs)
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
-        cron_logger.info(f"lenght before remove script tag: {len(str(soup.find("body")))}")
+        html_body_lenght = len(str(soup.find("body")))
+        cron_logger.info(f"lenght before remove script tag: {html_body_lenght}")
         for script in soup.find_all("script"):
             script.decompose()
 
