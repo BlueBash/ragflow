@@ -731,10 +731,10 @@ def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
                 business_hours_response = {}
                 business_hours_list = answer.get(key, [])
                 for day in business_hours_list:
-                    business_hours_response[day['day'].lower()] = {
-                        "open": day['open'],
-                        "from_time": day['from_time'],
-                        "to_time": day['to_time']
+                    business_hours_response[day.get('day', "Not Found").lower()] = {
+                        "open": day.get("open", "Not Found"),
+                        "from_time": day.get('from_time', "Not Found"),
+                        "to_time": day.get('to_time', "Not Found")
                     }
                 response_data["business_hours"] = business_hours_response
             else:
