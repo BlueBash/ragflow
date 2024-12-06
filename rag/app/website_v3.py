@@ -121,10 +121,13 @@ def generate_page_content_gpt(content, llm_factory, llm_id, llm_api_key, convers
     else:
         response_format = PageSections
     if llm_factory == "Gemini":
+        content = str(conversation_history)
+        if len(content)>80000:
+            content = content[:80000]
         genai.configure(api_key=llm_api_key)
         model = genai.GenerativeModel(llm_id)
         response = model.generate_content(
-            contents = str(conversation_history)[-80000:],
+            contents = content,
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json", response_schema=response_format
             ),
