@@ -467,6 +467,7 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         }
         unique_urls = list(set(processed_urls))
         unique_urls = exclude_pattern_from_urls(unique_urls, exclude_patterns)
+        filename = filename.rstrip('/')
         if filename in unique_urls:
             unique_urls.remove(filename)
         callback(0.27, f"Found {len(unique_urls)} urls.", chunk_count)
