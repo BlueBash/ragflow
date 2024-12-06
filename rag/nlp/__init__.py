@@ -593,6 +593,7 @@ def keyword_extraction(chat_mdl, content):
 
 
 import json
+import time
 from openai import OpenAI
 from pydantic import BaseModel
 from bs4 import BeautifulSoup
@@ -600,65 +601,101 @@ import google.generativeai as genai
 from rag.settings import cron_logger
 from langchain_community.document_loaders import AsyncHtmlLoader
 
-class ListBusinessGPT(BaseModel):
-    companyName: str
-    email: str
-    address: str
-    phoneNumbers: list[str]
-    workingHours: list[str]
 
+class Location(BaseModel):
+    street_address: str
+    city: str
+    state: str
+    postal_code: int
+    country: str
+    time_zone: str
+
+class BusinessHours(BaseModel):
+    day: str
+    open: bool
+    from_time: str
+    to_time: str
+
+class BusinessInfo(BaseModel):
+    business_name: str
+    email: str
+    phone_numbers: list[str]
+    full_address: str
+    location: Location
+    business_hours: list[BusinessHours]
+
+def generate_system_prompt():
+    prompt = """
+        You are an assistant designed to extract detailed business information from text inputs. Your task is to accurately identify and organize the following business details:
+            1. Business Name ('business_name'): The name of the business or organization. 
+            2. Email Address ('email'): The primary email address for contacting the business. 
+            3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business. 
+            4. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country'). 
+            5. Location ('location'): A structured representation of the business address broken down into: 
+            - street_address: The street address and any unit numbers. 
+            - city: The name of the city. 
+            - state: The state or region. 
+            - postal_code: The postal or ZIP code as an integer. 
+            - country: The country where the business is located.
+            - time_zone: The time zone in which the business operates (e.g., 'PST').
+            6. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing: 
+            - day (string): The day of the week. 
+            - open (boolean): Indicates whether the business is open on that day.
+            - from_time (string): The opening time in 24-hour format (e.g., '09:00').
+            - to_time (string): The closing time in 24-hour format (e.g., '17:00').
+            """
+    return prompt.strip()
+                                                                                                                              
 def generate_answer_gpt_list_only(content, llm_factory, llm_id, llm_api_key):
+    
+    history = [
+            {"role": "system", "content": generate_system_prompt()},
+            {"role": "user", "content": content}]
     if llm_factory == "Gemini":
         genai.configure(api_key=llm_api_key)
         model = genai.GenerativeModel(llm_id)
         result = model.generate_content(
-            content,
+            contents=str(history)[:80000],
             generation_config=genai.GenerationConfig(
-                response_mime_type="application/json", response_schema=ListBusinessGPT
+                response_mime_type="application/json", response_schema=BusinessInfo
             ),
         )
+        cron_logger.debug(f"Model result: {str(result)}")
         if "content" not in result.candidates[0]:
-            return []
+            return
         return json.loads(result.candidates[0].content.parts[0].text)
     elif llm_factory == "OpenAI":
         client = OpenAI(api_key=llm_api_key)
         completion = client.beta.chat.completions.parse(
             model = llm_id,
-            
-            messages=[
-                {"role": "system", "content": """
-                    You are an assistant designed to extract specific business information from a given text. Your task is to identify and extract the following details for each business:
-                    - companyName
-                    - email
-                    - address
-                    - phoneNumbers (list of phone numbers)
-                    - workingHours (list of working hours)
-                    """},
-                {"role": "user", "content": content}
-            ],
-            response_format=ListBusinessGPT
+            messages=history,
+            response_format=BusinessInfo
         )
         return completion.choices[0].message.parsed
     else:
         cron_logger.info(f"LLm Factory not found... {llm_factory}")
 
 def extract_html(urls):
+    start_time = time.time()
     loader = AsyncHtmlLoader(web_path=urls)
     docs = loader.load()
     soup = BeautifulSoup(docs[0].page_content, 'html.parser')
+    elapsed_time = time.time() - start_time
+    cron_logger.info(f"Time taken to scrape the web page: {elapsed_time} seconds")
     return soup
 
 def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
-    soup = extract_html([url])
-    cron_logger.info("generate html body done.")
-    
+    soup = extract_html([url])    
     try:
         html_body_length = len(str(soup.find("body")))
         cron_logger.info(f"len of html {len(str(soup))} len of body {html_body_length}")
+        start_time = time.time()
         answer = generate_answer_gpt_list_only(str(soup), llm_factory, llm_id, llm_api_key)
-        cron_logger.info(f"answer by model: {answer}")
+        elapsed_time = time.time() - start_time
+        cron_logger.info(f"[business_info_by_gpt_only] Time taken by model: {elapsed_time}, answer generated by model: {answer}")
     except Exception as e:
         error_message = str(e)
+        cron_logger.info(f"Error in business_info_by_gpt_only: {str(e)}")
         if "context_length_exceeded" in error_message:
             cron_logger.error(f"[ERROR] Maximum context length exceeded, error: {error_message}")
             script_tag  = soup.find_all("script")
@@ -671,9 +708,57 @@ def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
             except Exception as second_exception:
                 second_error_message = str(second_exception)
                 cron_logger.error(f"[ERROR] Failed to generate answer with half content, error: {second_error_message}")
-                return False
+                return False, str(e)
         else:
             cron_logger.error(f"[ERROR] scrape_data_by_urls, error: {error_message}")
-            return False
-            
-    return answer
+            return False, str(e)
+    
+    gpt_key_list = ["business_name", "email", "phone_numbers", "full_address", "location", "business_hours"]
+    location_list = ["street_address", "city", "state", "postal_code", "country", "time_zone"]
+    response_data = {}
+    if isinstance(answer, dict):
+        for key in gpt_key_list:
+            if key == "location":
+                location_response = {}
+                location_answer = answer.get(key, {})
+                for key_location in location_answer:
+                    location_response[key_location] = location_answer[key_location]
+                response_data["address"] = location_response
+            elif key == "full_address":
+                response_data["business_address"] = answer.get(key)
+            elif key == "business_hours":
+                business_hours_response = {}
+                business_hours_list = answer.get(key, [])
+                for day in business_hours_list:
+                    business_hours_response[day['day'].lower()] = {
+                        "open": day['open'],
+                        "from_time": day['from_time'],
+                        "to_time": day['to_time']
+                    }
+                response_data["business_hours"] = business_hours_response
+            else:
+                response_data[key] = answer.get(key)
+    else:
+        for key in gpt_key_list:
+            if key=="location":
+                location_response = {}
+                loaction_answer = getattr(answer, key)
+                for key_location in location_list:
+                    location_response[key_location] = getattr(loaction_answer, key_location)
+                response_data["address"] = location_response
+            elif key=="full_address":
+                response_data["business_address"] = getattr(answer, key)
+            elif key=="business_hours":
+                business_hours_response = {}
+                days_of_week = getattr(answer, key)
+                for day in days_of_week:
+                    business_hours_response[day.day.lower()] = {
+                        "open": day.open,
+                        "from_time": day.from_time,
+                        "to_time": day.to_time
+                    }
+                response_data["business_hours"] = business_hours_response
+            else:
+                response_data[key] = getattr(answer, key)
+    cron_logger.info(f"For url: {url}, response: {response_data} ")
+    return True, response_data

@@ -59,13 +59,17 @@ def get_task_status(doc_id):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.json()
+        elif response.status_code==404 or response.status_code==500:
+            cron_logger.info(f"for doc_id: {doc_id} ,Documnent deleted now canceling Job. Failed to update:{ response.status_code} , {response.text}")
+            response = {"progress": -1}
+            return response
         else:
-            cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
+            cron_logger.info(f"for doc_id: {doc_id} , Failed to update:{ response.status_code} , {response.text}")
             response = {"progress": 0}
             return response
 
     except Exception as e:
-        cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
+        cron_logger.error(f"for doc_id: {doc_id}, {str(e)}")
 
 def update_task_status(doc_id, data):
     ams_base_url = config['AMS']['AMS_ENDPOINT']
@@ -79,12 +83,12 @@ def update_task_status(doc_id, data):
     try:
         response = requests.put(url, headers=headers, json=data)
         if response.status_code == 200:
-            cron_logger.info(f"Update successful: {response.json()}")
+            cron_logger.info(f"For doc_id: {doc_id},  Update successful: {response.json()}")
         else:
-            cron_logger.info(f"Failed to update:{ response.status_code} , {response.text}")
+            cron_logger.info(f"For doc_id: {doc_id} , Failed to update:{ response.status_code} , {response.text}")
 
     except Exception as e:
-        cron_logger.error("update_task_status:({}), {}".format(doc_id, str(e)))
+        cron_logger.error(f"For doc_id: {doc_id} , Error {str(e)}")
 
 def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     global PAYLOAD, final_progress, progress_message
@@ -96,10 +100,10 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
     if prog!=0.1:
         result = get_task_status(doc_id)
         progress = result.get("progress", -1)
-        cron_logger.info(f"get_task_status-> progress: {progress}")
+        cron_logger.info(f"For doc_id: {doc_id} , get_task_status progress: {progress}")
         if result.get("progress")==-1:
-            msg = f"Cancel Job with doc_id:- {doc_id} reason canceld by manually."
-            cron_logger.info(msg)
+            msg = f"For doc_id: {doc_id}, Cancel Job reason cancelled manually."
+            cron_logger.warning(msg)
             cancel_job = True
             prog = -1
 
@@ -126,10 +130,10 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
         "chunks_count": chunks_count
     }
     try:
-        cron_logger.info(f"set_progress:- {str(d)}")
+        cron_logger.debug(f"For doc_id: {doc_id}, set_progress:- {str(d)}")
         update_task_status(doc_id, d)
     except Exception as e:
-        cron_logger.error("set_progress:({}), {}".format(doc_id, str(e)))
+        cron_logger.error(f"For doc_id: {doc_id}, {str(e)}")
 
     if cancel_job:
         if PAYLOAD:
@@ -317,8 +321,8 @@ def main():
     
     if len(r)==0:
         return
-    cron_logger.info(f"[task_executor_v2] PAYLOAD RECEIVED:- {r}")
     doc_id = r["doc_id"]
+    cron_logger.debug(f"for doc_id: {doc_id}, PAYLOAD RECEIVED:- {r}")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
@@ -408,7 +412,7 @@ def main():
                 callback(-1, f"Insert chunk error, detail info please check ragflow-logs/api/cron_logger.log. Please also check ES status!")
                 ELASTICSEARCH.deleteByQuery(
                     Q("match", doc_id=r["doc_id"]), idxnm=search.index_name(r["tenant_id"]))
-                cron_logger.error(f"Error for doc_id {doc_id}: {str(es_r)}")
+                cron_logger.error(f"for doc_id: {doc_id}: {str(es_r)}")
             callback(1., "Done RAPTOR!", chunk_count)
 
 

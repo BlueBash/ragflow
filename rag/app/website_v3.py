@@ -220,7 +220,7 @@ def scrape_data_by_urls(urls, eng, tenant_id, kb_id, doc_id, embd_mdl, llm_facto
                 element.decompose()
 
         body_element = str(soup.find("body"))
-        cron_logger.info(f"for doc_id: {doc_id} lenght after remove tag: {len(body_element)} for doc_id: {doc_id}")
+        cron_logger.info(f"for doc_id: {doc_id} lenght after remove tag: {len(body_element)}")
         try:
             section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
         except Exception as e:
