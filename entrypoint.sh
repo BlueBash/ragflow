@@ -4,7 +4,7 @@ export PYTHONPATH=$(pwd)
 
 PY=python3
 if [[ -z "$WS" || $WS -lt 1 ]]; then
-  WS=2
+  WS=1
 fi
 
 function task_exe(){

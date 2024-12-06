@@ -130,7 +130,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
         "chunks_count": chunks_count
     }
     try:
-        cron_logger.debug(f"For doc_id: {doc_id}, set_progress:- {str(d)}")
+        cron_logger.info(f"For doc_id: {doc_id}, set_progress:- {str(d)}")
         update_task_status(doc_id, d)
     except Exception as e:
         cron_logger.error(f"For doc_id: {doc_id}, {str(e)}")
@@ -322,7 +322,7 @@ def main():
     if len(r)==0:
         return
     doc_id = r["doc_id"]
-    cron_logger.debug(f"for doc_id: {doc_id}, PAYLOAD RECEIVED:- {r}")
+    cron_logger.info(f"for doc_id: {doc_id}, PAYLOAD RECEIVED:- {r}")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
