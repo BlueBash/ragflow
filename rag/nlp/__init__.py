@@ -627,6 +627,7 @@ class BusinessInfo(BaseModel):
 def generate_system_prompt():
     prompt = """
         You are an assistant designed to extract detailed business information from text inputs. Your task is to accurately identify and organize the following business details:
+            All fields are mandatory. If any field is missing, the response should explicitly state "Not Found" for that field.
             1. Business Name ('business_name'): The name of the business or organization. 
             2. Email Address ('email'): The primary email address for contacting the business. 
             3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business. 
