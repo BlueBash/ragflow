@@ -1,21 +1,21 @@
 import yaml
 import numpy as np
-from rag.utils import rmSpace
 from openai import OpenAI
 from pydantic import BaseModel
 from bs4 import BeautifulSoup
+from rag.utils import rmSpace
+from elasticsearch_dsl import Q
 from rag.nlp import rag_tokenizer
 from rag.nlp import tokenize_chunks
 from rag.settings import cron_logger
 import google.generativeai as genai
-from urllib.parse import urljoin, urlparse
 from tiktoken import encoding_for_model
-from api.utils.web_utils import is_valid_url
-from langchain_community.document_loaders import AsyncHtmlLoader
-from elasticsearch_dsl import Q
+from urllib.parse import urljoin, urlparse
 from rag.nlp import search, rag_tokenizer
 from rag.utils.es_conn import ELASTICSEARCH
+from api.utils.web_utils import is_valid_url
 from api.utils.file_utils import get_project_base_directory
+from langchain_community.document_loaders import AsyncHtmlLoader
 import requests, datetime, json, os, re, hashlib, copy, time, random
 
 
@@ -82,7 +82,7 @@ class WebsiteScraper:
 
 def generate_prompt_for_chunks():
     prompt = f"""
-        You are an expert in processing and structuring business-specific information for Retrieval-Augmented Generation (RAG) systems. Your objective is to analyze the provided content and generate a well-organized, comprehensive chunk of information tailored to the business.
+    You are an expert in processing and structuring business-specific information for Retrieval-Augmented Generation (RAG) systems. Your objective is to analyze the provided content and generate a well-organized, comprehensive chunk of information tailored to the business.
         Instructions:
 
         1. Content Creation:  

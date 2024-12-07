@@ -30,4 +30,4 @@ AMS:
 
 ENV:
   name: 'stage'
-  length_url_to_scrape: 5
+  length_url_to_scrape: 2

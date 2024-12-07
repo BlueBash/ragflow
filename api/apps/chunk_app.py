@@ -14,39 +14,35 @@
 #  limitations under the License.
 #
 
-import re
-import json
-import datetime
-import traceback
 
-from api.utils.web_utils import is_valid_url
 from flask import request
-from flask_login import login_required, current_user
+from rag.utils import rmSpace
 from elasticsearch_dsl import Q
 from rag.settings import cron_logger
-from rag.app.qa import rmPrefix, beAdoc
-from rag.nlp import search, rag_tokenizer, keyword_extraction, business_info_by_gpt_only
-from api.db.services.task_service import queue_tasks_v2
-from rag.utils.es_conn import ELASTICSEARCH
-from rag.utils import rmSpace
 from api.db import LLMType, ParserType
+from rag.app.qa import rmPrefix, beAdoc
+from rag.utils.es_conn import ELASTICSEARCH
+from api.utils.web_utils import is_valid_url
+from api.settings import RetCode, retrievaler
+from api.utils.api_utils import get_json_result
 from api.db.services.llm_service import LLMBundle
-from api.db.services.knowledgebase_service import KnowledgebaseService
+import traceback, datetime, hashlib, time, json, re
+from flask_login import login_required, current_user
+from api.db.services.task_service import queue_tasks_v2
 from api.db.services.llm_service import TenantLLMService
 from api.db.services.user_service import UserTenantService
-from api.utils.api_utils import server_error_response, get_data_error_result, validate_request
 from api.db.services.document_service import DocumentService
-from api.settings import RetCode, retrievaler, kg_retrievaler
-from api.utils.api_utils import get_json_result
-import hashlib
-
-
+from api.db.services.knowledgebase_service import KnowledgebaseService
+from rag.nlp import search, rag_tokenizer, keyword_extraction, business_info_by_gpt_only
+from api.utils.api_utils import server_error_response, get_data_error_result, validate_request
 
 @manager.route('/quick_scrape', methods=['POST'])
 @validate_request("tenant_id", "kb_id", "doc_id", "url", "llm_factory", "llm_id", "llm_api_key")
 def get_business_info():
     req = request.json
-    cron_logger.info(f"[chunks_app][business-info] payload :- {req}")
+    cron_logger.info(f" payload :- {req}")
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cron_logger.info(f"\n\n{current_time}, [business-info] PAYLOAD: {req}")
     url = req.get("url")
     llm_factory = req.get("llm_factory")
     llm_id = req.get("llm_id")
@@ -83,45 +79,38 @@ def get_business_info():
     except Exception as e:
         return server_error_response(e)
 
+
 @manager.route('/retrieval_test_v2', methods=['POST'])
 @validate_request("tenant_id", "kb_ids", "question")
-def retrieval_test1():
+def retrieval_test_v2():
     req = request.json
-    cron_logger.info(f"[chunks_app][retrieval_test_v2] payload :- {req}")
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cron_logger.info(f"\n\n{current_time}, [retrieval_test_v2] PAYLOAD: {req}")
+    tenant_id = req["tenant_id"]
+    kb_ids = req["kb_ids"]
+    question = req["question"]
+    doc_ids = req.get("doc_ids", [])
+
     page = int(req.get("page", 1))
     size = int(req.get("size", 30))
-    question = req["question"]
-    kb_ids = req["kb_ids"]
-    doc_ids = req.get("doc_ids", [])
+    
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
-    top = int(req.get("top_k", 1024))
-    tenant_id = req["tenant_id"]
+    top = int(req.get("top_k", 10))
+    
     try:
         embd_mdl = LLMBundle(req["embd_factory"], LLMType.EMBEDDING, req["embd_id"], req["embd_api_key"])
 
         rerank_mdl = None
         if req.get("rerank_id"):
-            print("rerank_mdl is selecting........")
             rerank_mdl = LLMBundle(req["rerank_factory"], LLMType.RERANK, llm_name=req["rerank_id"], api_key=req["rerank_api_key"])
-
-        if req.get("keyword", False):
-            chat_mdl = LLMBundle(req["llm_factory"], LLMType.CHAT, llm_name=req["llm_id"], api_key=req["llm_api_key"])
-            question += keyword_extraction(chat_mdl, question)
-
-        parser_id = "normal"  # pass if it is Graph
-        if parser_id != ParserType.KG:
-            retr = retrievaler
-        else:
-            retr = kg_retrievaler
-        
-        ranks = retr.retrieval(question, embd_mdl, tenant_id, kb_ids, page, size,
+        start_time = time.time()
+        ranks = retrievaler.retrieval(question, embd_mdl, tenant_id, kb_ids, page, size,
                                similarity_threshold, vector_similarity_weight, top,
                                doc_ids, rerank_mdl=rerank_mdl)
-        for c in ranks["chunks"]:
-            if "vector" in c:
-                del c["vector"]
-
+        
+        elapsed_time = time.time() - start_time
+        cron_logger.info(f"[retrieval_test_v2] Time taken by retrival: {elapsed_time}")
         return get_json_result(data=ranks)
     except Exception as e:
         if str(e).find("not_found") > 0:
@@ -528,8 +517,7 @@ def retrieval_test():
             chat_mdl = TenantLLMService.model_instance(kb.tenant_id, LLMType.CHAT)
             question += keyword_extraction(chat_mdl, question)
 
-        retr = retrievaler if kb.parser_id != ParserType.KG else kg_retrievaler
-        ranks = retr.retrieval(question, embd_mdl, kb.tenant_id, [kb_id], page, size,
+        ranks = retrievaler.retrieval(question, embd_mdl, kb.tenant_id, [kb_id], page, size,
                                similarity_threshold, vector_similarity_weight, top,
                                doc_ids, rerank_mdl=rerank_mdl)
         for c in ranks["chunks"]:

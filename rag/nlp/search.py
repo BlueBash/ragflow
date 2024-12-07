@@ -354,10 +354,11 @@ class Dealer:
                                            ins_embd,
                                            rag_tokenizer.tokenize(ans).split(" "),
                                            rag_tokenizer.tokenize(inst).split(" "))
-
+    
+    
     def retrieval(self, question, embd_mdl, tenant_id, kb_ids, page, page_size, similarity_threshold=0.2,
                   vector_similarity_weight=0.3, top=1024, doc_ids=None, aggs=True, rerank_mdl=None):
-        ranks = {"total": 0, "chunks": [], "doc_aggs": {}}
+        ranks = {"total": 0, "chunks": []}
         if not question:
             return ranks
         req = {"kb_ids": kb_ids, "doc_ids": doc_ids, "size": page_size,
@@ -373,8 +374,6 @@ class Dealer:
             sim, tsim, vsim = self.rerank(
                 sres, question, 1 - vector_similarity_weight, vector_similarity_weight)
         idx = np.argsort(sim * -1)
-
-        dim = len(sres.query_vector)
         start_idx = (page - 1) * page_size
         for i in idx:
             if sim[i] < similarity_threshold:
@@ -384,44 +383,86 @@ class Dealer:
             if start_idx >= 0:
                 continue
             if len(ranks["chunks"]) >= page_size:
-                if aggs:
-                    continue
                 break
             id = sres.ids[i]
-            dnm = sres.field[id]["docnm_kwd"]
-            did = sres.field[id]["doc_id"]
             d = {
-                "chunk_id": id,
-                "content_ltks": sres.field[id]["content_ltks"],
                 "content_with_weight": sres.field[id]["content_with_weight"],
-                "doc_id": sres.field[id]["doc_id"],
-                "docnm_kwd": dnm,
-                "kb_id": sres.field[id]["kb_id"],
-                "important_kwd": sres.field[id].get("important_kwd", []),
-                "img_id": sres.field[id].get("img_id", ""),
                 "similarity": sim[i],
                 "vector_similarity": vsim[i],
-                "term_similarity": tsim[i],
-                "vector": self.trans2floats(sres.field[id].get("q_%d_vec" % dim, "\t".join(["0"] * dim))),
-                "positions": sres.field[id].get("position_int", "").split("\t")
+                "term_similarity": tsim[i]
             }
-            if len(d["positions"]) % 5 == 0:
-                poss = []
-                for i in range(0, len(d["positions"]), 5):
-                    poss.append([float(d["positions"][i]), float(d["positions"][i + 1]), float(d["positions"][i + 2]),
-                                 float(d["positions"][i + 3]), float(d["positions"][i + 4])])
-                d["positions"] = poss
             ranks["chunks"].append(d)
-            if dnm not in ranks["doc_aggs"]:
-                ranks["doc_aggs"][dnm] = {"doc_id": did, "count": 0}
-            ranks["doc_aggs"][dnm]["count"] += 1
-        ranks["doc_aggs"] = [{"doc_name": k,
-                              "doc_id": v["doc_id"],
-                              "count": v["count"]} for k,
-                             v in sorted(ranks["doc_aggs"].items(),
-                                         key=lambda x:x[1]["count"] * -1)]
 
         return ranks
+        
+
+    # def retrieval(self, question, embd_mdl, tenant_id, kb_ids, page, page_size, similarity_threshold=0.2,
+    #               vector_similarity_weight=0.3, top=1024, doc_ids=None, aggs=True, rerank_mdl=None):
+    #     ranks = {"total": 0, "chunks": [], "doc_aggs": {}}
+    #     if not question:
+    #         return ranks
+    #     req = {"kb_ids": kb_ids, "doc_ids": doc_ids, "size": page_size,
+    #            "question": question, "vector": True, "topk": top,
+    #            "similarity": similarity_threshold,
+    #            "available_int": 1}
+    #     sres = self.search(req, index_name(tenant_id), embd_mdl)
+
+    #     if rerank_mdl:
+    #         sim, tsim, vsim = self.rerank_by_model(rerank_mdl,
+    #             sres, question, 1 - vector_similarity_weight, vector_similarity_weight)
+    #     else:
+    #         sim, tsim, vsim = self.rerank(
+    #             sres, question, 1 - vector_similarity_weight, vector_similarity_weight)
+    #     idx = np.argsort(sim * -1)
+
+    #     dim = len(sres.query_vector)
+    #     start_idx = (page - 1) * page_size
+    #     for i in idx:
+    #         if sim[i] < similarity_threshold:
+    #             break
+    #         ranks["total"] += 1
+    #         start_idx -= 1
+    #         if start_idx >= 0:
+    #             continue
+    #         if len(ranks["chunks"]) >= page_size:
+    #             if aggs:
+    #                 continue
+    #             break
+    #         id = sres.ids[i]
+    #         dnm = sres.field[id]["docnm_kwd"]
+    #         did = sres.field[id]["doc_id"]
+    #         d = {
+    #             "chunk_id": id,
+    #             "content_ltks": sres.field[id]["content_ltks"],
+    #             "content_with_weight": sres.field[id]["content_with_weight"],
+    #             "doc_id": sres.field[id]["doc_id"],
+    #             "docnm_kwd": dnm,
+    #             "kb_id": sres.field[id]["kb_id"],
+    #             "important_kwd": sres.field[id].get("important_kwd", []),
+    #             "img_id": sres.field[id].get("img_id", ""),
+    #             "similarity": sim[i],
+    #             "vector_similarity": vsim[i],
+    #             "term_similarity": tsim[i],
+    #             "vector": self.trans2floats(sres.field[id].get("q_%d_vec" % dim, "\t".join(["0"] * dim))),
+    #             "positions": sres.field[id].get("position_int", "").split("\t")
+    #         }
+    #         if len(d["positions"]) % 5 == 0:
+    #             poss = []
+    #             for i in range(0, len(d["positions"]), 5):
+    #                 poss.append([float(d["positions"][i]), float(d["positions"][i + 1]), float(d["positions"][i + 2]),
+    #                              float(d["positions"][i + 3]), float(d["positions"][i + 4])])
+    #             d["positions"] = poss
+    #         ranks["chunks"].append(d)
+    #         if dnm not in ranks["doc_aggs"]:
+    #             ranks["doc_aggs"][dnm] = {"doc_id": did, "count": 0}
+    #         ranks["doc_aggs"][dnm]["count"] += 1
+    #     ranks["doc_aggs"] = [{"doc_name": k,
+    #                           "doc_id": v["doc_id"],
+    #                           "count": v["count"]} for k,
+    #                          v in sorted(ranks["doc_aggs"].items(),
+    #                                      key=lambda x:x[1]["count"] * -1)]
+
+    #     return ranks
 
     def sql_retrieval(self, sql, fetch_size=128, format="json"):
         from api.settings import chat_logger

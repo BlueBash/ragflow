@@ -2,21 +2,22 @@ import numpy as np
 import pandas as pd
 from functools import partial
 from elasticsearch_dsl import Q
-from concurrent.futures import ThreadPoolExecutor
 from api.settings import retrievaler
-from rag.utils.es_conn import ELASTICSEARCH
 from timeit import default_timer as timer
 from rag.nlp import search, rag_tokenizer
-from rag.settings import database_logger, SVR_QUEUE_NAME
+from api.db import LLMType, ParserType
+from rag.utils.es_conn import ELASTICSEARCH
+from rag.utils.redis_conn import REDIS_CONN
+from api.db.services.llm_service import LLMBundle
+from concurrent.futures import ThreadPoolExecutor
 from rag.settings import cron_logger, DOC_MAXIMUM_SIZE
+from rag.settings import database_logger, SVR_QUEUE_NAME
+from api.utils.file_utils import get_project_base_directory
 from rag.utils import rmSpace, findMaxTm, num_tokens_from_string
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
-import io, requests, datetime, json, logging, os, hashlib, copy, re, sys, time, yaml, traceback
-from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v2, website_v3
-from api.db import LLMType, ParserType
-from api.db.services.llm_service import LLMBundle
-from api.utils.file_utils import get_project_base_directory
-from rag.utils.redis_conn import REDIS_CONN
+import requests, datetime, json, logging, os, hashlib, copy, re, sys, time, yaml, traceback
+from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, knowledge_graph, email, website_v3
+
 
 BATCH_SIZE = 64
 
@@ -35,8 +36,7 @@ FACTORY = {
     ParserType.ONE.value: one,
     ParserType.AUDIO.value: audio,
     ParserType.EMAIL.value: email,
-    ParserType.KG.value: knowledge_graph,
-    ParserType.WEBSITE.value: website_v2
+    ParserType.KG.value: knowledge_graph
 }
 with open("./conf/service_conf.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -325,7 +325,8 @@ def main():
     if len(r)==0:
         return
     doc_id = r["doc_id"]
-    cron_logger.info(f"for doc_id: {doc_id}, PAYLOAD RECEIVED:- {r}")
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cron_logger.info(f"\n\n{current_time} [TASK]:PAYLOAD: {r}")
     st = timer()
     callback = partial(set_progress, r["doc_id"])
     callback(0.1, msg="Task dispatched...")
