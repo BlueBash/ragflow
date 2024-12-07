@@ -90,7 +90,7 @@ def update_task_status(doc_id, data):
     except Exception as e:
         cron_logger.error(f"For doc_id: {doc_id} , Error {str(e)}")
 
-def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
+def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0, replace_message=False):
     global PAYLOAD, final_progress, progress_message
     cancel_job = False
     if prog is not None and prog < 0:
@@ -107,8 +107,11 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0):
             cancel_job = True
             prog = -1
 
-    if msg:
-        progress_message = progress_message+ "\n "+ msg
+    if replace_message:
+        progress_message ="\n".join(progress_message.split("\n")[:-1]) + "\n "+ msg
+    else:
+        if msg:
+            progress_message = progress_message+ "\n "+ msg
 
     if prog is not None and prog < 0:
         status = "failed"

@@ -630,13 +630,13 @@ def generate_system_prompt():
             All fields are mandatory. If any field is missing, the response should explicitly state "Not Found" for that field.
             1. Business Name ('business_name'): The name of the business or organization. 
             2. Email Address ('email'): The primary email address for contacting the business. 
-            3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business. 
+            3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business.
             4. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country'). 
             5. Location ('location'): A structured representation of the business address broken down into: 
             - street_address: The street address and any unit numbers. 
             - city: The name of the city. 
             - state: The state or region. 
-            - postal_code: The postal or ZIP code as an integer. 
+            - postal_code: The postal or ZIP code as an integer.
             - country: The country where the business is located.
             - time_zone: The time zone in which the business operates (e.g., 'PST').
             6. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing: 

@@ -82,27 +82,25 @@ class WebsiteScraper:
 
 def generate_prompt_for_chunks():
     prompt = f"""
-            You are a skilled content processor specializing in creating structured knowledge chunks for Retrieval-Augmented Generation (RAG) systems. 
-            Your task is to analyze the provided content and generate one comprehensive chunk of information that can be stored in a database.
+        You are an expert in processing and structuring business-specific information for Retrieval-Augmented Generation (RAG) systems. Your objective is to analyze the provided content and generate a well-organized, comprehensive chunk of information tailored to the business.
+        Instructions:
 
-            ### Instructions:
+        1. Content Creation:  
+        - Carefully analyze the provided content to extract all meaningful and relevant details related to the business.  
+        - Focus on summarizing information that addresses practical, business-specific queries, such as services offered, business operations, and key offerings.  
+        - Avoid referencing technical structures or webpage elements (e.g., "header," "footer," "navigation menu").  
+        - Use the business name or relevant business context to provide clarity and specificity about the services and offerings.  
+        - Ensure the content is concise, accurate, and relevant to the business's purpose or services, focusing on what users need to know.  
 
-            1. **Content Creation**:
-                - Carefully analyze the provided content and extract all meaningful and relevant details related to the business.
-                - Focus on providing information that answers practical, business-specific queries a user might have, such as services offered or general business operations.
-                - Avoid references to webpage sections, HTML structure, or technical terms (e.g., "navigation menu," "header," "footer," "form").
-                - Instead, use the **business name** or relevant business context to describe the services and offerings.
-                - The content should be clear, relevant, and aligned with the user's informational needs, expressed in a straightforward manner.
-                - **Do not create any questions yet**; your sole focus should be on writing the content, ensuring it fully represents the information the user would perceive.
+        2. Question Generation:  
+        - Once the content is complete, create 3–5 user-centric questions based on the details provided.  
+        - These questions should reflect real-world inquiries a user might have about the business, such as "What services does [Business Name] offer?"  
+        - Ensure the questions are derived directly from the content you created and avoid referencing technical aspects or unnecessary details.  
 
-            2. **Question Generation**:
-                - After the content is fully created, generate 3–5 user-centric questions based on the content. These questions should reflect practical inquiries a user might have, such as "What services does [Business Name] provide?"
-                - The questions should be based solely on the content you created and should not include references to the technical structure or HTML aspects of the webpage.
-                - **Do not create questions until the content is fully completed**. The questions should arise naturally from the content.
-
-            3. **Final Note**:
-                - The content and the questions will be combined together into a single chunk for storage in a RAG system.
-                - **Do not worry about self-contained content**. Both the content and the questions will be merged into a single chunk, so focus on writing clear, user-focused content and questions, without referencing any technical or HTML structure.
+        3. General Guidelines:  
+        - Focus entirely on business-specific information rather than creating self-contained or general-purpose content.  
+        - Aim for clarity and relevance, ensuring the chunk is highly practical for business-related user queries.  
+        - The content and questions will be merged into a single unit for use in the RAG system, so write with the end-user’s needs in mind.
     """
     return prompt.strip()
 
@@ -296,6 +294,7 @@ def scrape_data_by_urls_first_page(urls, tenant_id, kb_id, doc_id, embd_mdl, llm
     cron_logger.info(f"for doc_id: {doc_id} working on base url scrapping... section found:- {section_list} token used : {token}")
     for section in section_list:
         try:
+            callback(0.20, f"Working on {section} section", chunk_count, True)
             cks = []
             question = (f"""Create a detailed summary of the '{section}' focusing on user-relevant details,
                             avoiding references to section names or HTML structure. Afterward, generate 3–5 user-centric questions related to the content.""")
@@ -323,16 +322,21 @@ def scrape_data_by_urls_first_page(urls, tenant_id, kb_id, doc_id, embd_mdl, llm
             
             chunk_count += len(set([c["_id"] for c in cks]))
             insert_chunks_into_db(tenant_id, cks, doc_id, callback=None)
-            callback(0.23, "", chunk_count)
             cron_logger.info(f"for doc_id: {doc_id} chunk created for url: {urls[i]}, section: {section}, used token: {token}")
         except Exception as e:
             callback(0.23, f"[ERROR]scrape_data_by_urls :{str(e)}", chunk_count)
             cron_logger.info(f"for doc_id: {doc_id} [ERROR]scrape_data_by_urls used token {token}, error: {str(e)}")
             continue
     
-    callback(0.25, f"Base URL scrapping Done. Total token used {total_token}", chunk_count)
+    callback(0.25, f"Base URL chunks Done. {total_token} tokens used so far.", chunk_count, True)
     return chunk_count, total_token
 
+def get_ordinal(n):
+    if 11 <= n % 100 <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 def scrape_data_by_urls(urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, chunk_count, total_token, callback=None):
     loader = AsyncHtmlLoader(web_path=urls)
@@ -343,6 +347,7 @@ def scrape_data_by_urls(urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, l
             {"role": "system", "content": "You are a highly skilled content analyst specializing in Provide a list of the major sections of the webpage. Provide a list of the major sections of the webpage. example of sections: Header, hero section, footer"}
         ]
         prog=0.33 + 0.5 * (i + 1) / len(html_docs)
+        callback(prog, f"working on {get_ordinal(i+1)} URL. {total_token} tokens used so far.", chunk_count, True)
         soup = BeautifulSoup(html_docs[i].page_content, 'html.parser')
         html_body_lenght = len(str(soup.find("body")))
         cron_logger.info(f"for doc_id: {doc_id} lenght before script tag: {html_body_lenght}")
@@ -358,10 +363,10 @@ def scrape_data_by_urls(urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, l
         except Exception as e:
             error_message = str(e)
             if "context_length_exceeded" in error_message:
-                callback(prog, f"[ERROR] Maximum token limit exceeded", chunk_count)
+                callback(prog, f"[ERROR] Maximum token limit exceeded for {urls[i]}", chunk_count)
                 cron_logger.error(f"for doc_id: {doc_id} [ERROR] Maximum context length exceeded: used token {token}, error: {error_message}")
             else:
-                callback(prog, f"[ERROR]{i} url {error_message}", chunk_count)
+                callback(prog, f"[ERROR]{get_ordinal(i+1)} url {urls[i]} {error_message}", chunk_count)
                 cron_logger.error(f"for doc_id: {doc_id} [ERROR] scrape_data_by_urls used token {token}, error: {error_message}")
             continue
 
@@ -411,10 +416,6 @@ def scrape_data_by_urls(urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, l
         
         chunk_count += len(set([c["_id"] for c in cks]))
         insert_chunks_into_db(tenant_id, cks, doc_id, callback=None)
-        if i%5==0 or i<5:
-            callback(prog, f"{i+1} URL Done. {total_token} tokens used so far.", chunk_count)
-        else:
-            callback(prog, "", chunk_count)
     callback(1., f"Total token used {total_token} \nDone!", chunk_count)
 
 
@@ -480,13 +481,13 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         if env_name=="stage":
             length_url_to_scrape=config['ENV']['length_url_to_scrape']
             cron_logger.info(f"for doc_id: {doc_id} Urls stripped beacuse it contains more then {length_url_to_scrape} URLS: {unique_urls} strted Scrapping...")
-            callback(0.28, f"Scraping {length_url_to_scrape} URLs in staging; this message is for development purposes only and won't appear in production.", chunk_count)
+            callback(0.28, f"Scraping {length_url_to_scrape} URLs in staging. this message is for development purposes only and won't appear in production.", chunk_count)
 
         if len(unique_urls)>length_url_to_scrape:
             unique_urls = unique_urls[:length_url_to_scrape]
             cron_logger.info(f"for doc_id: {doc_id} Urls stripped beacuse it conatin more then {length_url_to_scrape} URLS: {unique_urls} strted Scrapping...")
 
-        callback(0.29, f"Currently we are scrapping only {len(unique_urls)} urls . Scrapping Started.", chunk_count)
+        callback(0.29, f"Currently we are scrapping only {len(unique_urls)} urls .\n Scrapping Started.", chunk_count)
         scrape_data_by_urls(unique_urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, llm_id, llm_api_key, chunk_count, total_token, callback=callback)
     else:
         callback(0.25, "Start scrapping web page Only.")
