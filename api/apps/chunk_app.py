@@ -40,7 +40,6 @@ from api.utils.api_utils import server_error_response, get_data_error_result, va
 @validate_request("tenant_id", "kb_id", "doc_id", "url", "llm_factory", "llm_id", "llm_api_key")
 def get_business_info():
     req = request.json
-    cron_logger.info(f" payload :- {req}")
     current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cron_logger.info(f"\n\n{current_time}, [business-info] PAYLOAD: {req}")
     url = req.get("url")
@@ -118,6 +117,34 @@ def retrieval_test_v2():
                                    retcode=RetCode.DATA_ERROR)
         return server_error_response(e)
 
+embd_mdl_retrival = LLMBundle("BAAI", LLMType.EMBEDDING, "BAAI/bge-large-zh-v1.5", "")
+
+@manager.route('/retrieval_kickcall', methods=['POST'])
+@validate_request("tenant_id", "kb_ids", "question")
+def retrieval_kickcall():
+    req = request.json
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cron_logger.info(f"\n\n{current_time}, [retrieval_kickcall] Request Kickcall Agent PAYLOAD: {req}")
+    tenant_id = req["tenant_id"]
+    kb_ids = req["kb_ids"]
+    question = req["question"]
+    doc_ids = req.get("doc_ids", [])
+    size = int(req.get("size", 30))
+    similarity_threshold = float(req.get("similarity_threshold", 0.2))
+    top = int(req.get("top_k", 10))
+    
+    try:
+        start_time = time.time()
+        ranks = retrievaler.retrieval_kickcall(question, embd_mdl_retrival, tenant_id, kb_ids, size, similarity_threshold, top, doc_ids)
+        elapsed_time = time.time() - start_time
+        cron_logger.info(f"[retrieval_kickcall] Time taken by kickcall retrival: {elapsed_time}")
+        return get_json_result(data=ranks)
+    except Exception as e:
+        if str(e).find("not_found") > 0:
+            return get_json_result(data=False, retmsg=f'No chunk found! Check the chunk status please!',
+                                   retcode=RetCode.DATA_ERROR)
+        return server_error_response(e)
+    
 
 @manager.route('/list_v2', methods=['POST'])
 @validate_request("doc_id")

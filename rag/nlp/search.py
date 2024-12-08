@@ -394,6 +394,23 @@ class Dealer:
             ranks["chunks"].append(d)
 
         return ranks
+    
+    
+    def retrieval_kickcall(self, question, embd_mdl, tenant_id, kb_ids, page_size,
+                      similarity_threshold=0.2, top=1024, doc_ids=None):
+        ranks = {"total": 0, "chunks": []}
+        if not question:
+            return ranks
+        req = {"kb_ids": kb_ids, "doc_ids": doc_ids, "size": page_size,
+               "question": question, "vector": True, "topk": top,
+               "similarity": similarity_threshold, "available_int": 1}
+        sres = self.search(req, index_name(tenant_id), embd_mdl)
+
+        ranks["chunks"] = [
+            {"content_with_weight": sres.field[id]["content_with_weight"]}
+            for id in sres.ids
+        ]
+        return ranks
         
 
     # def retrieval(self, question, embd_mdl, tenant_id, kb_ids, page, page_size, similarity_threshold=0.2,
