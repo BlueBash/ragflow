@@ -485,7 +485,7 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n。；！？"):
         if not pos: pos = ""
         if tnum < 8:
             pos = ""
-        # Ensure that the length of the merged chunk does not exceed chunk_token_num  
+        # Ensure that the length of the merged chunk does not exceed chunk_token_num
         if tk_nums[-1] > chunk_token_num:
 
             if t.find(pos) < 0:
@@ -527,7 +527,7 @@ def docx_question_level(p, bull = -1):
                 return j+1, txt
     return len(BULLET_PATTERN[bull]), txt
 
-    
+
 def concat_img(img1, img2):
     if img1 and not img2:
         return img1
@@ -582,10 +582,10 @@ def naive_merge_docx(sections, chunk_token_num=128, delimiter="\n。；！？"):
 
 def keyword_extraction(chat_mdl, content):
     prompt = """
-        You're a question analyzer. 
+        You're a question analyzer.
         1. Please give me the most important keyword/phrase of this question.
         Answer format: (in language of user's question)
-        - keyword: 
+        - keyword:
     """
     kwd = chat_mdl.chat(prompt, [{"role": "user",  "content": content}], {"temperature": 0.2})
     if isinstance(kwd, tuple): return kwd[0]
@@ -628,27 +628,27 @@ def generate_system_prompt():
     prompt = """
         You are an assistant designed to extract detailed business information from text inputs. Your task is to accurately identify and organize the following business details:
             All fields are mandatory. If any field is missing, the response should explicitly state "Not Found" for that field.
-            1. Business Name ('business_name'): The name of the business or organization. 
-            2. Email Address ('email'): The primary email address for contacting the business. 
+            1. Business Name ('business_name'): The name of the business or organization.
+            2. Email Address ('email'): The primary email address for contacting the business.
             3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business.
-            4. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country'). 
-            5. Location ('location'): A structured representation of the business address broken down into: 
-            - street_address: The street address and any unit numbers. 
-            - city: The name of the city. 
-            - state: The state or region. 
+            4. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country').
+            5. Location ('location'): A structured representation of the business address broken down into:
+            - street_address: The street address and any unit numbers.
+            - city: The name of the city.
+            - state: The state or region.
             - postal_code: The postal or ZIP code as an integer.
             - country: The country where the business is located.
             - time_zone: The time zone in which the business operates (e.g., 'PST').
-            6. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing: 
-            - day (string): The day of the week. 
+            6. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing:
+            - day (string): The day of the week.
             - open (boolean): Indicates whether the business is open on that day.
             - from_time (string): The opening time in 24-hour format (e.g., '09:00').
             - to_time (string): The closing time in 24-hour format (e.g., '17:00').
             """
     return prompt.strip()
-                                                                                                                              
+
 def generate_answer_gpt_list_only(content, llm_factory, llm_id, llm_api_key):
-    
+
     history = [
             {"role": "system", "content": generate_system_prompt()},
             {"role": "user", "content": content}]
@@ -686,7 +686,7 @@ def extract_html(urls):
     return soup
 
 def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
-    soup = extract_html([url])    
+    soup = extract_html([url])
     try:
         html_body_length = len(str(soup.find("body")))
         cron_logger.info(f"len of html {len(str(soup))} len of body {html_body_length}")
@@ -713,7 +713,7 @@ def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
         else:
             cron_logger.error(f"[ERROR] scrape_data_by_urls, error: {error_message}")
             return False, str(e)
-    
+
     gpt_key_list = ["business_name", "email", "phone_numbers", "full_address", "location", "business_hours"]
     location_list = ["street_address", "city", "state", "postal_code", "country", "time_zone"]
     response_data = {}

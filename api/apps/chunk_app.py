@@ -446,7 +446,7 @@ def create1():
     name = req["name"]
 
     md5 = hashlib.md5()
-    md5.update((req["content_with_weight"] + req["doc_id"]).encode("utf-8"))
+    md5.update((req["content_with_weight"] + str(req["doc_id"])).encode("utf-8"))
     chunck_id = md5.hexdigest()
     d = {"id": chunck_id, "content_ltks": rag_tokenizer.tokenize(req["content_with_weight"]),
          "content_with_weight": req["content_with_weight"]}
