@@ -54,7 +54,7 @@ def get_task_status(doc_id):
         'Content-Type': 'application/json',
         'Api-Access-Key': api_access_key
     }
-    
+
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
@@ -79,7 +79,7 @@ def update_task_status(doc_id, data):
         'Content-Type': 'application/json',
         'Api-Access-Key': api_access_key
     }
-    
+
     try:
         response = requests.put(url, headers=headers, json=data)
         if response.status_code == 200:
@@ -97,15 +97,14 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0, replace
         msg = "[ERROR] " + msg
         cancel_job = True
 
-    if prog!=0.1:
-        result = get_task_status(doc_id)
-        progress = result.get("progress", -1)
-        cron_logger.info(f"For doc_id: {doc_id} , get_task_status progress: {progress}")
-        if result.get("progress")==-1:
-            msg = f"For doc_id: {doc_id}, Cancel Job reason cancelled manually."
-            cron_logger.warning(msg)
-            cancel_job = True
-            prog = -1
+    result = get_task_status(doc_id)
+    progress = result.get("progress", -1)
+    cron_logger.info(f"For doc_id: {doc_id} , get_task_status progress: {progress}")
+    if result.get("progress")==-1:
+        msg = f"Cancel Job reason cancelled manually."
+        cron_logger.warning(msg)
+        cancel_job = True
+        prog = -2
 
     if replace_message:
         progress_message ="\n".join(progress_message.split("\n")[:-1]) + "\n "+ msg
@@ -114,7 +113,11 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0, replace
             progress_message = progress_message+ "\n "+ msg
 
     if prog is not None and prog < 0:
-        status = "failed"
+        if prog == -2:
+            prog = 0
+            status = "cancelled"
+        else:
+            status = "failed"
     elif prog == 1.0:
         status = "success"
     else:
@@ -122,7 +125,7 @@ def set_progress(doc_id, prog=None, msg="Processing...", chunks_count=0, replace
 
     if prog == 0.1:
         progress_message = msg
-        
+
     if prog is not None:
         final_progress = prog
 
@@ -195,7 +198,7 @@ def build(row):
         callback(-1, f"Get file from url: { str(e)}")
         cron_logger.error(f"Error in file {row['url']}: {str(e)}")
         return
-    
+
     try:
         if len(binary) > DOC_MAXIMUM_SIZE:
             set_progress(row["doc_id"], prog=-1, msg="File size exceeds( <= %dMb )" %
@@ -209,7 +212,7 @@ def build(row):
     try:
         cks = chunker.chunk(row["name"], binary=binary, lang=row["language"], callback=callback,
                             kb_id=row["kb_id"], parser_config=row["parser_config"], tenant_id=row["tenant_id"])
-        
+
         cron_logger.info("Chunking({}) /{}".format(timer() - st, row["name"]))
     except Exception as e:
         callback(-1, f"Internal server error while chunking: %s" % str(e).replace("'", ""))
@@ -321,7 +324,7 @@ def run_raptor(row, chat_mdl, embd_mdl, callback=None):
 
 def main():
     r = collect()
-    
+
     if len(r)==0:
         return
     doc_id = r["doc_id"]

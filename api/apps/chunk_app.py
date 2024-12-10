@@ -92,11 +92,11 @@ def retrieval_test_v2():
 
     page = int(req.get("page", 1))
     size = int(req.get("size", 30))
-    
+
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
     top = int(req.get("top_k", 10))
-    
+
     try:
         embd_mdl = LLMBundle(req["embd_factory"], LLMType.EMBEDDING, req["embd_id"], req["embd_api_key"])
 
@@ -107,7 +107,7 @@ def retrieval_test_v2():
         ranks = retrievaler.retrieval(question, embd_mdl, tenant_id, kb_ids, page, size,
                                similarity_threshold, vector_similarity_weight, top,
                                doc_ids, rerank_mdl=rerank_mdl)
-        
+
         elapsed_time = time.time() - start_time
         cron_logger.info(f"[retrieval_test_v2] Time taken by retrival: {elapsed_time}")
         return get_json_result(data=ranks)
@@ -132,7 +132,7 @@ def retrieval_kickcall():
     size = int(req.get("size", 30))
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     top = int(req.get("top_k", 10))
-    
+
     try:
         start_time = time.time()
         ranks = retrievaler.retrieval_kickcall(question, embd_mdl_retrival, tenant_id, kb_ids, size, similarity_threshold, top, doc_ids)
@@ -144,7 +144,7 @@ def retrieval_kickcall():
             return get_json_result(data=False, retmsg=f'No chunk found! Check the chunk status please!',
                                    retcode=RetCode.DATA_ERROR)
         return server_error_response(e)
-    
+
 
 @manager.route('/list_v2', methods=['POST'])
 @validate_request("doc_id")
@@ -379,7 +379,7 @@ def rm_v2():
         return get_json_result(data=True)
     except Exception as e:
         return server_error_response(e)
-    
+
 
 @manager.route('/rm', methods=['POST'])
 @login_required
@@ -430,12 +430,12 @@ def update_v2():
             return server_error_response("dimension of vector not match")
 
         d["q_%d_vec" % len(v)] = v.tolist()
-        
+
         ELASTICSEARCH.upsert([d], search.index_name(tenant_id))
         return get_json_result(data={"chunk_id": chunck_id})
     except Exception as e:
         return server_error_response(e)
-    
+
 
 @manager.route('/create_v2', methods=['POST'])
 @validate_request("tenant_id", "doc_id", "kb_id", "name" ,"content_with_weight")
@@ -444,7 +444,7 @@ def create1():
     tenant_id = req["tenant_id"]
     kb_id = req["kb_id"]
     name = req["name"]
-    
+
     md5 = hashlib.md5()
     md5.update((req["content_with_weight"] + req["doc_id"]).encode("utf-8"))
     chunck_id = md5.hexdigest()
