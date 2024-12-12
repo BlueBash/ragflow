@@ -266,7 +266,7 @@ async def process_sections(section_list, llm_factory, llm_id, llm_api_key, body_
 
         except Exception as e:
             cron_logger.info(f"Error processing section {section}: {e}")
-            return
+            continue
     results = await asyncio.gather(*tasks)
     return results
 
