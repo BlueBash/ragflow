@@ -618,6 +618,7 @@ class BusinessHours(BaseModel):
 
 class BusinessInfo(BaseModel):
     business_name: str
+    industry: str
     email: str
     phone_numbers: list[str]
     full_address: str
@@ -629,21 +630,24 @@ def generate_system_prompt():
         You are an assistant designed to extract detailed business information from text inputs. Your task is to accurately identify and organize the following business details:
             All fields are mandatory. If any field is missing, the response should explicitly state "Not Found" for that field.
             1. Business Name ('business_name'): The name of the business or organization.
-            2. Email Address ('email'): The primary email address for contacting the business.
-            3. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business.
-            4. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country').
-            5. Location ('location'): A structured representation of the business address broken down into:
-            - street_address: The street address and any unit numbers.
-            - city: The name of the city.
-            - state: The state or region.
-            - postal_code: The postal or ZIP code as an integer.
-            - country: The country where the business is located.
-            - time_zone: The time zone in which the business operates (e.g., 'PST').
-            6. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing:
-            - day (string): The day of the week.
-            - open (boolean): Indicates whether the business is open on that day.
-            - from_time (string): The opening time in 24-hour format (e.g., '09:00').
-            - to_time (string): The closing time in 24-hour format (e.g., '17:00').
+            2. Industory Name ('industry'): You need to determine the most appropriate industry for the website.
+                Select the industry name from the following list based on your assumptions: Technology, Healthcare, Finance, Manufacturing, Energy, Retail, Real Estate, Transportation and Logistics, Agriculture, Entertainment and Media, Education, Tourism and Hospitality, Automotive, Telecommunications, Construction, Others.
+                If unsure about the exact industry, select "Others"
+            3. Email Address ('email'): The primary email address for contacting the business.
+            4. Phone Numbers ('phone_numbers'): A list of all phone numbers linked to the business.
+            5. Full Address ('full_address'): The complete business address in a single string (e.g., '123 Main St, City, State, ZIP, Country').
+            6. Location ('location'): A structured representation of the business address broken down into:
+                - street_address: The street address and any unit numbers.
+                - city: The name of the city.
+                - state: The state or region.
+                - postal_code: The postal or ZIP code as an integer.
+                - country: The country where the business is located.
+                - time_zone: The time zone in which the business operates (e.g., 'PST').
+            7. Business Hours ('business_hours'): A list of daily hours of operation, - Ensure that the business hours include a report for each day of the week, even if some days are closed or not present then (i.e., open: false) with each entry containing:
+                - day (string): The day of the week.
+                - open (boolean): Indicates whether the business is open on that day.
+                - from_time (string): The opening time in 24-hour format (e.g., '09:00').
+                - to_time (string): The closing time in 24-hour format (e.g., '17:00').
             """
     return prompt.strip()
 
@@ -714,7 +718,7 @@ def business_info_by_gpt_only(url, llm_factory, llm_id, llm_api_key):
             cron_logger.error(f"[ERROR] scrape_data_by_urls, error: {error_message}")
             return False, str(e)
 
-    gpt_key_list = ["business_name", "email", "phone_numbers", "full_address", "location", "business_hours"]
+    gpt_key_list = ["business_name", "industry", "email", "phone_numbers", "full_address", "location", "business_hours"]
     location_list = ["street_address", "city", "state", "postal_code", "country", "time_zone"]
     response_data = {}
     if isinstance(answer, dict):
