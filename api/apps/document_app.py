@@ -23,6 +23,7 @@ from copy import deepcopy
 from io import BytesIO
 
 import flask
+from rag.settings import cron_logger
 from elasticsearch_dsl import Q
 from flask import request
 from flask_login import login_required, current_user
@@ -92,6 +93,7 @@ def run_v2():
 @validate_request("tenant_id", "destination_kb_id", "documents")
 def duplicate_run_v2():
     req = request.json
+    cron_logger.info(f"duplicate req: {req}")
     tenant_id = req["tenant_id"]
     destination_kb_id = [str(req["destination_kb_id"])]
     documents = req["documents"]
@@ -104,7 +106,7 @@ def duplicate_run_v2():
             destination_doc_id = int(doc["destination_doc_id"])
             ELASTICSEARCH.deleteByQuery(Q("match", doc_id=destination_doc_id), idxnm=search.index_name(tenant_id))
             init_kb(tenant_id)
-            print(f"working on {destination_doc_id}")
+            cron_logger.info(f"working on {destination_doc_id}")
 
             cks = retrievaler.chunk_list_by_doc_id_for_duplicate(tenant_id, source_doc_id, start, end, destination_kb_id, destination_doc_id)
             es_bulk_size = 16
