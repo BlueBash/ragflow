@@ -354,8 +354,8 @@ class Dealer:
                                            ins_embd,
                                            rag_tokenizer.tokenize(ans).split(" "),
                                            rag_tokenizer.tokenize(inst).split(" "))
-    
-    
+
+
     def retrieval(self, question, embd_mdl, tenant_id, kb_ids, page, page_size, similarity_threshold=0.2,
                   vector_similarity_weight=0.3, top=1024, doc_ids=None, aggs=True, rerank_mdl=None):
         ranks = {"total": 0, "chunks": []}
@@ -394,8 +394,8 @@ class Dealer:
             ranks["chunks"].append(d)
 
         return ranks
-    
-    
+
+
     def retrieval_kickcall(self, question, embd_mdl, tenant_id, kb_ids, page_size,
                       similarity_threshold=0.2, top=1024, doc_ids=None):
         ranks = {"total": 0, "chunks": []}
@@ -411,7 +411,7 @@ class Dealer:
             for id in sres.ids
         ]
         return ranks
-        
+
 
     # def retrieval(self, question, embd_mdl, tenant_id, kb_ids, page, page_size, similarity_threshold=0.2,
     #               vector_similarity_weight=0.3, top=1024, doc_ids=None, aggs=True, rerank_mdl=None):
@@ -524,7 +524,7 @@ class Dealer:
     #     s = Search()
     #     s = s.query(Q("match", doc_id=doc_id))[0:max_count].sort({"create_timestamp_flt": {"order": "desc"}})
     #     s = s.to_dict()
-        
+
     #     es_res = self.es.search(s, timeout="600s", src=True)
     #     res = []
     #     count = 0
@@ -536,16 +536,16 @@ class Dealer:
     #         for n in keys_to_check:
     #             if re.search("_vec$", n):
     #                 del chunk_source[n]
-            
+
     #         res.append(chunk_source)
     #         count += 1
     #     return res
-    
+
     def chunk_list_by_doc_id(self, tenant_id, doc_id, start, end):
         s = Search(using=self.es, index=index_name(tenant_id))
         s = s.query(Q("match", doc_id=doc_id))[start:end].sort({"create_timestamp_flt": {"order": "desc"}})
         s = s.to_dict()
-        
+
         es_res = self.es.search(s, timeout="600s", src=True)
         res = []
         count = 0
@@ -557,11 +557,26 @@ class Dealer:
             for n in keys_to_check:
                 if re.search("_vec$", n):
                     del chunk_source[n]
-            
+
             res.append(chunk_source)
             count += 1
         return res
-    
+
+    def chunk_list_by_doc_id_for_duplicate(self, tenant_id, doc_id, start, end, destination_kb_id, destination_doc_id):
+        s = Search(using=self.es, index=index_name(tenant_id))
+        s = s.query(Q("match", doc_id=doc_id))[start:end]
+        s = s.to_dict()
+
+        es_res = self.es.search(s, timeout="600s", src=True)
+        res = []
+        for index, chunk in enumerate(es_res['hits']['hits']):
+            chunk_source = chunk["_source"]
+            chunk_source["_id"] = chunk["_id"]+"1"
+            chunk_source["doc_id"] = destination_doc_id
+            chunk_source["kb_id"] = destination_kb_id
+            res.append(chunk_source)
+        return res
+
     def doc_list_by_kb_id(self, tenant_id, kb_id):
         max_count = 10000
         s = Search(using=self.es, index=index_name(tenant_id))

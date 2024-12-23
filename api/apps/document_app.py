@@ -18,9 +18,7 @@ import hashlib
 import json
 import os
 import pathlib
-import re
-import traceback
-from concurrent.futures import ThreadPoolExecutor
+import re, copy
 from copy import deepcopy
 from io import BytesIO
 
@@ -28,20 +26,15 @@ import flask
 from elasticsearch_dsl import Q
 from flask import request
 from flask_login import login_required, current_user
-
-from api.db.db_models import Task, File
-from api.db.services.dialog_service import DialogService, ConversationService
-from api.db.services.file2document_service import File2DocumentService
-from api.db.services.file_service import FileService
-from api.db.services.llm_service import LLMBundle
-from api.db.services.task_service import TaskService, queue_tasks, queue_tasks_v2
-from api.db.services.user_service import TenantService, UserTenantService
-from graphrag.mind_map_extractor import MindMapExtractor
-from rag.app import naive
 from rag.nlp import search
-from rag.utils.es_conn import ELASTICSEARCH
+from api.db.db_models import Task, File
 from api.db.services import duplicate_name
+from rag.utils.es_conn import ELASTICSEARCH
+from api.db.services.file_service import FileService
+from api.db.services.file2document_service import File2DocumentService
 from api.db.services.knowledgebase_service import KnowledgebaseService
+from api.db.services.user_service import TenantService, UserTenantService
+from api.db.services.task_service import TaskService, queue_tasks, queue_tasks_v2
 from api.utils.api_utils import server_error_response, get_data_error_result, validate_request
 from api.utils import get_uuid
 from api.db import FileType, TaskStatus, ParserType, FileSource, LLMType
@@ -52,6 +45,128 @@ from rag.utils.minio_conn import MINIO
 from api.utils.file_utils import filename_type, thumbnail, get_project_base_directory
 from api.utils.web_utils import html2pdf, is_valid_url
 from api.settings import retrievaler
+from rag.nlp import tokenize_chunks
+from rag.app.website_v2 import init_kb
+
+
+@manager.route('/run_v2', methods=['POST'])
+@validate_request("tenant_id", "kb_id", "documents")
+def run_v2():
+    req = request.json
+    tenant_id = req["tenant_id"]
+    try:
+        for doc in req["documents"]:
+            doc_id = doc["id"]
+            doc_url = doc["url"]
+            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
+
+            if "parser_config" in doc:
+                parser_config = doc["parser_config"]
+                if "chunk_token_num" in parser_config:
+                    parser_config["chunk_token_num"] = int(parser_config["chunk_token_num"])
+                if "max_cluster" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["max_cluster"] = int(parser_config["raptor"]["max_cluster"])
+                if "max_token" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["max_token"] = int(parser_config["raptor"]["max_token"])
+                if "random_seed" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["random_seed"] = int(parser_config["raptor"]["random_seed"])
+                if "threshold" in parser_config.get("raptor", {}):
+                    parser_config["raptor"]["threshold"] = float(parser_config["raptor"]["threshold"])
+
+            new_doc = req.copy()
+            new_doc.pop("documents", None)
+            new_doc["doc_id"] = doc_id
+            new_doc["url"] = doc_url
+            new_doc["name"] = doc_url
+            new_doc["parser_id"] = doc.get("parser_id")
+            new_doc["parser_config"] = doc.get("parser_config")
+            new_doc["language"] = "English"
+            queue_tasks_v2(new_doc)
+
+        return get_json_result(data=True)
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/duplicate_run_v2', methods=['POST'])
+@validate_request("tenant_id", "destination_kb_id", "documents")
+def duplicate_run_v2():
+    req = request.json
+    tenant_id = req["tenant_id"]
+    destination_kb_id = [str(req["destination_kb_id"])]
+    documents = req["documents"]
+    try:
+        start = 0
+        end = 2000
+
+        for doc in documents:
+            source_doc_id = int(doc["source_doc_id"])
+            destination_doc_id = int(doc["destination_doc_id"])
+            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=destination_doc_id), idxnm=search.index_name(tenant_id))
+            init_kb(tenant_id)
+            print(f"working on {destination_doc_id}")
+
+            cks = retrievaler.chunk_list_by_doc_id_for_duplicate(tenant_id, source_doc_id, start, end, destination_kb_id, destination_doc_id)
+            es_bulk_size = 16
+            len_cks = len(cks)
+            for b in range(0, len_cks, es_bulk_size):
+                es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(tenant_id))
+            if es_r:
+                ELASTICSEARCH.deleteByQuery(
+                    Q("match", doc_id=destination_doc_id), idxnm=search.index_name(tenant_id))
+
+        return get_json_result(data=True)
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/list_v2', methods=['GET'])
+def list_docs_v2():
+    tenant_id = request.args.get("tenant_id")
+    kb_id = request.args.get("kb_id")
+
+    if not tenant_id:
+        return get_json_result(
+            data=False, retmsg='Lack of "Tenant ID"', retcode=RetCode.ARGUMENT_ERROR)
+
+    if not kb_id:
+        return get_json_result(
+            data=False, retmsg='Lack of "KB ID"', retcode=RetCode.ARGUMENT_ERROR)
+
+    page_number = int(request.args.get("page", 1))
+    items_per_page = int(request.args.get("page_size", 15))
+    try:
+        doc_ids = retrievaler.doc_list_by_kb_id(tenant_id, kb_id)
+        total = len(doc_ids)
+        from_value = (page_number - 1) * items_per_page
+        doc_ids = doc_ids[from_value:from_value+items_per_page]
+
+        return get_json_result(data={"total": total, "docs": doc_ids})
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/rm_v2', methods=['POST'])
+@validate_request("tenant_id", "doc_id")
+def rm_v2():
+    req = request.json
+    tenant_id = req["tenant_id"]
+    doc_ids = req["doc_id"]
+
+    if isinstance(doc_ids, str):
+        doc_ids = [doc_ids]
+    errors=""
+    for doc_id in doc_ids:
+        try:
+            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
+        except Exception as e:
+            errors += str(e)
+
+    if errors:
+        return get_json_result(data=False, retmsg=errors, retcode=RetCode.SERVER_ERROR)
+
+    return get_json_result(data=True)
+
 
 
 @manager.route('/upload', methods=['POST'])
@@ -184,32 +299,6 @@ def create():
         return server_error_response(e)
 
 
-@manager.route('/list_v2', methods=['GET'])
-def list_docs_v2():
-    tenant_id = request.args.get("tenant_id")
-    kb_id = request.args.get("kb_id")
-
-    if not tenant_id:
-        return get_json_result(
-            data=False, retmsg='Lack of "Tenant ID"', retcode=RetCode.ARGUMENT_ERROR)
-
-    if not kb_id:
-        return get_json_result(
-            data=False, retmsg='Lack of "KB ID"', retcode=RetCode.ARGUMENT_ERROR)
-
-    page_number = int(request.args.get("page", 1))
-    items_per_page = int(request.args.get("page_size", 15))
-    try:
-        doc_ids = retrievaler.doc_list_by_kb_id(tenant_id, kb_id)
-        total = len(doc_ids)
-        from_value = (page_number - 1) * items_per_page
-        doc_ids = doc_ids[from_value:from_value+items_per_page]
-
-        return get_json_result(data={"total": total, "docs": doc_ids})
-    except Exception as e:
-        return server_error_response(e)
-    
-
 @manager.route('/list', methods=['GET'])
 @login_required
 def list_docs():
@@ -305,28 +394,6 @@ def change_status():
         return server_error_response(e)
 
 
-@manager.route('/rm_v2', methods=['POST'])
-@validate_request("tenant_id", "doc_id")
-def rm_v2():
-    req = request.json
-    tenant_id = req["tenant_id"]
-    doc_ids = req["doc_id"]
-    
-    if isinstance(doc_ids, str):
-        doc_ids = [doc_ids]
-    errors=""
-    for doc_id in doc_ids:
-        try:
-            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-        except Exception as e:
-            errors += str(e)
-
-    if errors:
-        return get_json_result(data=False, retmsg=errors, retcode=RetCode.SERVER_ERROR)
-
-    return get_json_result(data=True)
-
-
 @manager.route('/rm', methods=['POST'])
 @login_required
 @validate_request("doc_id")
@@ -389,46 +456,6 @@ def get_chunk_by_doc_id_new():
         return get_json_result(data={"chunks": data})
     except Exception as e:
         return server_error_response(e)
-
-
-@manager.route('/run_v2', methods=['POST'])
-@validate_request("tenant_id", "kb_id", "documents")
-def run_v2():
-    req = request.json
-    tenant_id = req["tenant_id"]
-    try:
-        for doc in req["documents"]:
-            doc_id = doc["id"]
-            doc_url = doc["url"]
-            ELASTICSEARCH.deleteByQuery(Q("match", doc_id=doc_id), idxnm=search.index_name(tenant_id))
-
-            if "parser_config" in doc:
-                parser_config = doc["parser_config"]
-                if "chunk_token_num" in parser_config:
-                    parser_config["chunk_token_num"] = int(parser_config["chunk_token_num"])
-                if "max_cluster" in parser_config.get("raptor", {}):
-                    parser_config["raptor"]["max_cluster"] = int(parser_config["raptor"]["max_cluster"])
-                if "max_token" in parser_config.get("raptor", {}):
-                    parser_config["raptor"]["max_token"] = int(parser_config["raptor"]["max_token"])
-                if "random_seed" in parser_config.get("raptor", {}):
-                    parser_config["raptor"]["random_seed"] = int(parser_config["raptor"]["random_seed"])
-                if "threshold" in parser_config.get("raptor", {}):
-                    parser_config["raptor"]["threshold"] = float(parser_config["raptor"]["threshold"])
-
-            new_doc = req.copy()
-            new_doc.pop("documents", None)
-            new_doc["doc_id"] = doc_id
-            new_doc["url"] = doc_url
-            new_doc["name"] = doc_url
-            new_doc["parser_id"] = doc.get("parser_id")
-            new_doc["parser_config"] = doc.get("parser_config")
-            new_doc["language"] = "English"
-            queue_tasks_v2(new_doc)
-
-        return get_json_result(data=True)
-    except Exception as e:
-        return server_error_response(e)
-    
 
 
 @manager.route('/run', methods=['POST'])

@@ -83,20 +83,20 @@ def generate_prompt(html_body):
     prompt = f"""
     You are a highly skilled content analyst specializing in Retrieval-Augmented Generation (RAG) systems.
 
-    1. **Content Analysis & Chunking**  
-       - Analyze the provided HTML body and extract only meaningful, relevant, and coherent text.  
-       - Divide the content into **self-contained, semantically complete** chunks suitable for RAG.  
-       - Prioritize textual coherence, logical flow, and contextual relevance for each chunk. 
+    1. **Content Analysis & Chunking**
+       - Analyze the provided HTML body and extract only meaningful, relevant, and coherent text.
+       - Divide the content into **self-contained, semantically complete** chunks suitable for RAG.
+       - Prioritize textual coherence, logical flow, and contextual relevance for each chunk.
        - Remove all HTML tags, comments, or extraneous formatting.
 
-    2. **Metadata Association (Optional)**  
-       - Where applicable, associate each chunk with relevant metadata (e.g., section headers, contextual labels).  
-       - Ensure the metadata helps to clarify the chunk's origin or context within the document (e.g., "Introduction", "Conclusion", etc.).  
+    2. **Metadata Association (Optional)**
+       - Where applicable, associate each chunk with relevant metadata (e.g., section headers, contextual labels).
+       - Ensure the metadata helps to clarify the chunk's origin or context within the document (e.g., "Introduction", "Conclusion", etc.).
 
     **Input:**
     - HTML Body: {html_body}
 
-    **Output Requirements:**  
+    **Output Requirements:**
     - Return a **list of chunks**. Each chunk must be a valid text string, without HTML tags.
     - Please ensure that the chunks are clean, well-structured, and meet the specified token limit.
     - Make sure each chunk has **between 400 to 500 tokens** limit.
@@ -269,10 +269,10 @@ def exclude_pattern_from_urls(urls, exclude_patterns):
             elif url.endswith(pattern):
                 should_exclude = True
                 break
-        
+
         if not should_exclude:
             filtered_urls.append(url)
-    
+
     return filtered_urls
 
 
@@ -289,7 +289,7 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         "docnm_kwd": filename,
         "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
     }
-   
+
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     scrap_website = parser_config.get("scrap_website", "false")
     exclude_patterns = parser_config.get("exclude_urls", [])
