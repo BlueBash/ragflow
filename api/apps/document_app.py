@@ -113,9 +113,9 @@ def duplicate_run_v2():
             len_cks = len(cks)
             for b in range(0, len_cks, es_bulk_size):
                 es_r = ELASTICSEARCH.bulk(cks[b:b + es_bulk_size], search.index_name(tenant_id))
-            if es_r:
-                ELASTICSEARCH.deleteByQuery(
-                    Q("match", doc_id=destination_doc_id), idxnm=search.index_name(tenant_id))
+                if es_r:
+                    ELASTICSEARCH.deleteByQuery(
+                        Q("match", doc_id=destination_doc_id), idxnm=search.index_name(tenant_id))
 
         return get_json_result(data=True)
     except Exception as e:
