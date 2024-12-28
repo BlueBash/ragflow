@@ -367,8 +367,18 @@ def scrape_data_by_urls(urls, tenant_id, kb_id, doc_id, embd_mdl, llm_factory, l
             for element in soup.find_all(tag):
                 element.decompose()
 
-        body_element = str(soup.find("body"))
+        try:
+            body_element = str(json.loads(str(soup)))
+            conversation_history = [
+                {"role": "system", "content": "Given the following JSON data, please identify and provide a list of the major sections present in the content. A major section could refer to any key or attribute in the JSON that represents a distinct part of the data, such as metadata, content categories, or structural divisions. For example, sections may include 'features', 'rows', 'footer', etc. The goal is to analyze the JSON structure and identify the high-level sections that help categorize and organize the data."}
+            ]
+            callback(0.5, f"json body found for data", 0)
+        except:
+            body_element = str(soup.find("body"))
         cron_logger.info(f"for doc_id: {doc_id} lenght after remove tag: {len(body_element)}")
+        if len(body_element)<10:
+            callback(1., f"No chunks to embed body found: {str(body_element)}", 0)
+            return
         try:
             section_answer, token, conversation_history = generate_page_content_gpt(body_element, llm_factory, llm_id, llm_api_key, conversation_history, is_chunking=False)
         except Exception as e:
