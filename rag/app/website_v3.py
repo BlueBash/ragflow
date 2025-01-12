@@ -471,6 +471,7 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
 
     scrap_website = parser_config.get("scrap_website", "false")
     exclude_patterns = parser_config.get("exclude_urls", [])
+    length_url_to_scrape = parser_config.get("length_url_to_scrape", 25)
     unique_urls=[]
     chunk_count = 0
     total_token = 0
@@ -498,9 +499,9 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
         callback(0.27, f"Found {len(unique_urls)} urls.", chunk_count)
         cron_logger.info(f"for doc_id: {doc_id} , len of unique url:- {len(unique_urls)}")
         env_name = config['ENV']['name']
-        length_url_to_scrape = 25
         if env_name=="stage":
-            length_url_to_scrape=config['ENV']['length_url_to_scrape']
+            length_url_to_scrape = parser_config.get("length_url_to_scrape", config['ENV']['length_url_to_scrape'])
+            exclude_patterns = parser_config.get("exclude_urls", [])
             cron_logger.info(f"for doc_id: {doc_id} Urls stripped beacuse it contains more then {length_url_to_scrape} URLS: {unique_urls} strted Scrapping...")
             callback(0.28, f"Scraping {length_url_to_scrape} URLs in staging. this message is for development purposes only and won't appear in production.", chunk_count)
 
