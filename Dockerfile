@@ -14,7 +14,7 @@ ENV PATH="$POETRY_HOME/bin:$PATH"
 
 COPY pyproject.toml poetry.lock* /ragflow/
 
-RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi
+RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi --no-root
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('wordnet')"
 RUN apt-get update && apt-get install -y curl gnupg && rm -rf /var/lib/apt/lists/*
 RUN curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
