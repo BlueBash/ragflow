@@ -471,7 +471,7 @@ def chunk(tenant_id, kb_id, doc_id, filename, embd_mdl, llm_factory, llm_id, llm
 
     scrap_website = parser_config.get("scrap_website", "false")
     exclude_patterns = parser_config.get("exclude_urls", [])
-    length_url_to_scrape = parser_config.get("length_url_to_scrape", 25)
+    length_url_to_scrape = int(parser_config.get("length_url_to_scrape", 25))
     unique_urls=[]
     chunk_count = 0
     total_token = 0
